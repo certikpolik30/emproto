@@ -20,8 +20,8 @@ class Transport:
 
         # 2️⃣ ODESLÁNÍ veřejného klíče ECDH + PODPISU
         ec_public_bytes = self.encryption.ec_public_key.public_bytes(
-            encoding=self.encryption.serialization.Encoding.X962,
-            format=self.encryption.serialization.PublicFormat.UncompressedPoint
+            encoding=self.encryption.Encoding.X962,  # Adjust this line according to the correct attribute or method
+            format=self.encryption.PublicFormat.UncompressedPoint  # Adjust this line according to the correct attribute or method
         )
         signature = self.encryption.sign_message(ec_public_bytes + nonce)
 
