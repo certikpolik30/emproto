@@ -5,7 +5,7 @@ import struct
 def send_encrypted_message(sock, encrypted_message):
     """Odešle šifrovanou zprávu přes TCP socket"""
     message_length = len(encrypted_message)
-    sock.sendall(struct.pack("!I", message_length))  # Posíláme 4 bajty velikosti zprávy
+    sock.sendall(struct.pack("!I", message_length))
     sock.sendall(encrypted_message)
 
 def receive_encrypted_message(sock):
@@ -23,7 +23,6 @@ def send_encrypted_file(sock, encrypted_file_data, file_name):
     file_name_length = len(file_name_encoded)
     file_data_length = len(encrypted_file_data)
 
-    # Posíláme délku názvu souboru, samotný název a šifrovaný soubor
     sock.sendall(struct.pack("!I", file_name_length))
     sock.sendall(file_name_encoded)
     sock.sendall(struct.pack("!Q", file_data_length))
