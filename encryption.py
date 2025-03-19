@@ -22,7 +22,8 @@ class Encryption:
         self.rsa_public_key = self.rsa_private_key.public_key()
 
         # Embedded server RSA public key for ECDH authentication
-        self.server_rsa_public_key = rsa.RSAPublicKey.load_pem(open("server_rsa_public_key.pem", "rb").read())
+        with open("server_rsa_public_key.pem", "rb") as key_file:
+            self.server_rsa_public_key = serialization.load_pem_public_key(key_file.read())
 
     def derive_shared_key(self, peer_public_bytes):
         """ Odvození sdíleného klíče pomocí ECDH """
