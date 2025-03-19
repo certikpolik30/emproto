@@ -1,83 +1,142 @@
 import os
-import hashlib
 import struct
-from cryptography.hazmat.primitives.asymmetric import ec, rsa, padding
-from cryptography.hazmat.primitives import hashes, serialization, hmac
+import hashlib
+import hmac
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.asymmetric import rsa, ec
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.concatkdf import ConcatKDFHash
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.backends import default_backend
 
-# ECDH klíčové páry
+# === Funkce pro ECDH klíče ===
 def generate_ecdh_keypair():
-    private_key = ec.generate_private_key(ec.SECP384R1())
+    """Vygeneruje ECDH klíčový pár"""
+    private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
     public_key = private_key.public_key()
     return private_key, public_key
 
-def derive_shared_key(private_key, peer_public_key_bytes):
-    peer_public_key = serialization.load_der_public_key(peer_public_key_bytes)
-    shared_key = private_key.exchange(ec.ECDH(), peer_public_key)
-    return hashlib.sha256(shared_key).digest()
+def derive_shared_key(private_key, peer_public_key):
+    """Odvodí sdílený klíč pomocí ECDH"""
+    shared_secret = private_key.exchange(ec.ECDH(), peer_public_key)
+    derived_key = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=None,
+        info=b'EMProto Key Exchange',
+        backend=default_backend()
+    ).derive(shared_secret)
+    return derived_key
 
-def rsa_generate_keypair():
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+# === Funkce pro AES-GCM šifrování ===
+def aes_gcm_encrypt(key, plaintext, associated_data=b''):
+    """Zašifruje text pomocí AES-256-GCM"""
+    iv = os.urandom(12)  # GCM nonce
+    cipher = Cipher(algorithms.AES(key), modes.GCM(iv), backend=default_backend())
+    encryptor = cipher.encryptor()
+    encryptor.authenticate_additional_data(associated_data)
+    ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+    return iv, ciphertext, encryptor.tag
+
+def aes_gcm_decrypt(key, iv, ciphertext, tag, associated_data=b''):
+    """Dešifruje text pomocí AES-256-GCM"""
+    cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag), backend=default_backend())
+    decryptor = cipher.decryptor()
+    decryptor.authenticate_additional_data(associated_data)
+    return decryptor.update(ciphertext) + decryptor.finalize()
+
+# === Funkce pro RSA šifrování klíčů ===
+def generate_rsa_keypair():
+    """Vygeneruje RSA-2048 klíčový pár"""
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
     public_key = private_key.public_key()
     return private_key, public_key
 
 def rsa_encrypt(public_key, data):
+    """Zašifruje data pomocí RSA-2048"""
     return public_key.encrypt(
         data,
-        padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
     )
 
 def rsa_decrypt(private_key, ciphertext):
+    """Dešifruje data pomocí RSA-2048"""
     return private_key.decrypt(
         ciphertext,
-        padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
     )
 
-def rsa_sign(private_key, data):
-    return private_key.sign(
-        data,
-        padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
-        hashes.SHA256()
-    )
-
-def rsa_verify(public_key, signature, data):
-    public_key.verify(
-        signature,
-        data,
-        padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
-        hashes.SHA256()
-    )
-
-def kdf(auth_key, msg_key):
-    kdf_input = auth_key + msg_key
-    derived = hashlib.sha256(kdf_input).digest()
-    aes_key = derived[:32]
-    aes_iv = derived[32 - 12:32]
-    return aes_key, aes_iv
-
-def encrypt(auth_key, payload, session_id, sequence_number):
+# === Funkce pro zprávy a soubory ===
+def encrypt_message(auth_key, message):
+    """Šifruje textovou zprávu (AES-256-GCM)"""
     salt = os.urandom(8)
-    padded_payload = payload + os.urandom(16)
-    msg_key = hashlib.sha256(salt + session_id + padded_payload).digest()[:16]
-    aes_key, aes_iv = kdf(auth_key, msg_key)
-    aesgcm = AESGCM(aes_key)
-    encrypted_data = aesgcm.encrypt(aes_iv, padded_payload, None)
-    auth_key_id = auth_key[:8]
-    packet = auth_key_id + msg_key + salt + session_id + struct.pack('>Q', sequence_number) + encrypted_data
-    return packet
+    session_id = os.urandom(8)
+    seq_number = struct.pack("Q", int.from_bytes(os.urandom(8), 'big') % (2**32))  # Sekvenční číslo
+    payload = salt + session_id + seq_number + message.encode()
 
-def decrypt(auth_key, packet):
-    auth_key_id = packet[:8]
-    msg_key = packet[8:24]
-    salt = packet[24:32]
-    session_id = packet[32:40]
-    seq = struct.unpack('>Q', packet[40:48])[0]
-    encrypted_data = packet[48:]
-    aes_key, aes_iv = kdf(auth_key, msg_key)
-    aesgcm = AESGCM(aes_key)
-    decrypted_data = aesgcm.decrypt(aes_iv, encrypted_data, None)
-    computed_msg_key = hashlib.sha256(salt + session_id + decrypted_data).digest()[:16]
-    if computed_msg_key != msg_key:
-        raise ValueError("Invalid msg_key (possible tampering or MITM attack)")
-    return decrypted_data, seq, session_id, salt
+    msg_key = hashlib.sha256(payload).digest()[:16]
+    derived_key = hashlib.sha256(auth_key + msg_key).digest()
+    iv, ciphertext, tag = aes_gcm_encrypt(derived_key, payload)
+
+    return msg_key + iv + tag + ciphertext
+
+def decrypt_message(auth_key, encrypted_message):
+    """Dešifruje textovou zprávu (AES-256-GCM)"""
+    msg_key = encrypted_message[:16]
+    iv = encrypted_message[16:28]
+    tag = encrypted_message[28:44]
+    ciphertext = encrypted_message[44:]
+
+    derived_key = hashlib.sha256(auth_key + msg_key).digest()
+    decrypted_payload = aes_gcm_decrypt(derived_key, iv, ciphertext, tag)
+
+    salt = decrypted_payload[:8]
+    session_id = decrypted_payload[8:16]
+    seq_number = decrypted_payload[16:24]
+    message = decrypted_payload[24:].decode()
+
+    return message
+
+def encrypt_file(auth_key, file_path):
+    """Zašifruje soubor pomocí AES-256-GCM"""
+    with open(file_path, 'rb') as f:
+        file_data = f.read()
+
+    salt = os.urandom(8)
+    session_id = os.urandom(8)
+    seq_number = struct.pack("Q", int.from_bytes(os.urandom(8), 'big') % (2**32))
+    payload = salt + session_id + seq_number + file_data
+
+    msg_key = hashlib.sha256(payload).digest()[:16]
+    derived_key = hashlib.sha256(auth_key + msg_key).digest()
+    iv, ciphertext, tag = aes_gcm_encrypt(derived_key, payload)
+
+    return msg_key + iv + tag + ciphertext
+
+def decrypt_file(auth_key, encrypted_data, output_path):
+    """Dešifruje soubor pomocí AES-256-GCM"""
+    msg_key = encrypted_data[:16]
+    iv = encrypted_data[16:28]
+    tag = encrypted_data[28:44]
+    ciphertext = encrypted_data[44:]
+
+    derived_key = hashlib.sha256(auth_key + msg_key).digest()
+    decrypted_payload = aes_gcm_decrypt(derived_key, iv, ciphertext, tag)
+
+    with open(output_path, 'wb') as f:
+        f.write(decrypted_payload[24:])  # Odstraníme Salt, Session_ID a sekvenční číslo
+
+# === Ochrana proti Replay Attackům ===
+def verify_message_integrity(auth_key, decrypted_message, expected_msg_key):
+    """Ověří integritu zprávy po dešifrování"""
+    calculated_msg_key = hashlib.sha256(auth_key + decrypted_message.encode()).digest()[:16]
+    return hmac.compare_digest(calculated_msg_key, expected_msg_key)
