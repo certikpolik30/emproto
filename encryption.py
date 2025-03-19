@@ -7,7 +7,6 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.asymmetric import rsa, ec
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.concatkdf import ConcatKDFHash
 from cryptography.hazmat.backends import default_backend
 
 # === Funkce pro ECDH klíče ===
@@ -81,7 +80,8 @@ def encrypt_message(auth_key, message):
     salt = os.urandom(8)
     session_id = os.urandom(8)
     seq_number = struct.pack("Q", int.from_bytes(os.urandom(8), 'big') % (2**32))  # Sekvenční číslo
-    payload = salt + session_id + seq_number + message.encode()
+    timestamp = struct.pack("Q", int.from_bytes(os.urandom(8), 'big'))  # Časové razítko
+    payload = salt + session_id + seq_number + timestamp + message.encode()
 
     msg_key = hashlib.sha256(payload).digest()[:16]
     derived_key = hashlib.sha256(auth_key + msg_key).digest()
@@ -102,7 +102,8 @@ def decrypt_message(auth_key, encrypted_message):
     salt = decrypted_payload[:8]
     session_id = decrypted_payload[8:16]
     seq_number = decrypted_payload[16:24]
-    message = decrypted_payload[24:].decode()
+    timestamp = decrypted_payload[24:32]
+    message = decrypted_payload[32:].decode()
 
     return message
 
@@ -114,7 +115,8 @@ def encrypt_file(auth_key, file_path):
     salt = os.urandom(8)
     session_id = os.urandom(8)
     seq_number = struct.pack("Q", int.from_bytes(os.urandom(8), 'big') % (2**32))
-    payload = salt + session_id + seq_number + file_data
+    timestamp = struct.pack("Q", int.from_bytes(os.urandom(8), 'big'))
+    payload = salt + session_id + seq_number + timestamp + file_data
 
     msg_key = hashlib.sha256(payload).digest()[:16]
     derived_key = hashlib.sha256(auth_key + msg_key).digest()
@@ -133,10 +135,19 @@ def decrypt_file(auth_key, encrypted_data, output_path):
     decrypted_payload = aes_gcm_decrypt(derived_key, iv, ciphertext, tag)
 
     with open(output_path, 'wb') as f:
-        f.write(decrypted_payload[24:])  # Odstraníme Salt, Session_ID a sekvenční číslo
+        f.write(decrypted_payload[32:])  # Odstraníme Salt, Session_ID, sekvenční číslo a časové razítko
 
 # === Ochrana proti Replay Attackům ===
 def verify_message_integrity(auth_key, decrypted_message, expected_msg_key):
     """Ověří integritu zprávy po dešifrování"""
     calculated_msg_key = hashlib.sha256(auth_key + decrypted_message.encode()).digest()[:16]
     return hmac.compare_digest(calculated_msg_key, expected_msg_key)
+
+# === ECDH autentizace ===
+def authenticate_ecdh(ecdh_public_key):
+    """Autentizuje ECDH veřejný klíč pomocí RSA"""
+    server_rsa_public_key = load_server_rsa_public_key()  # Nahrát veřejný RSA klíč serveru
+    return rsa_encrypt(server_rsa_public_key, ecdh_public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    ))
