@@ -76,7 +76,9 @@ def rsa_decrypt(private_key, ciphertext):
 
 # === Funkce pro zprávy a soubory ===
 def encrypt_message(auth_key, message):
-    """Šifruje textovou zprávu (AES-256-GCM)"""
+    """
+    Šifruje textovou zprávu (AES-256-GCM)
+    """
     salt = os.urandom(8)
     session_id = os.urandom(8)
     seq_number = struct.pack("Q", int.from_bytes(os.urandom(8), 'big') % (2**32))  # Sekvenční číslo
@@ -90,7 +92,9 @@ def encrypt_message(auth_key, message):
     return msg_key + iv + tag + ciphertext
 
 def decrypt_message(auth_key, encrypted_message):
-    """Dešifruje textovou zprávu (AES-256-GCM)"""
+    """
+    Dešifruje textovou zprávu (AES-256-GCM)
+    """
     msg_key = encrypted_message[:16]
     iv = encrypted_message[16:28]
     tag = encrypted_message[28:44]
@@ -151,3 +155,13 @@ def authenticate_ecdh(ecdh_public_key):
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo
     ))
+
+# === Obfuskování ===
+def obfuscate_data(data):
+    """Obfuskuje data pro skrývání jejich struktury"""
+    return aes_gcm_encrypt(os.urandom(32), data)[1]
+
+def deobfuscate_data(obfuscated_data):
+    """Deobfuskuje data do jejich původní podoby"""
+    key = obfuscated_data[:32]
+    return aes_gcm_decrypt(key, obfuscated_data[32:44], obfuscated_data[44:], obfuscated_data[28:44])
