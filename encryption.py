@@ -1,57 +1,52 @@
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.backends import default_backend
 import os
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-class EncryptionLayer:
+class AESGCMEncryption:
     def __init__(self):
-        self.private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=3072
+        self.backend = default_backend()
+        self.aes_key = None
+
+    def encrypt(self, key, data):
+        salt = os.urandom(8)
+        kdf = HKDF(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            info=b'emproto',
+            backend=self.backend
         )
-        self.public_key = self.private_key.public_key()
-
-    def generate_rsa_keys(self):
-        private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=3072
+        aes_key = kdf.derive(key)
+        iv = os.urandom(12)
+        cipher = Cipher(
+            algorithms.AES(aes_key),
+            modes.GCM(iv),
+            backend=self.backend
         )
-        public_key = private_key.public_key()
-        return private_key, public_key
+        encryptor = cipher.encryptor()
+        ciphertext = encryptor.update(data) + encryptor.finalize()
+        return salt + iv + ciphertext + encryptor.tag
 
-    def encrypt_message(self, message, public_key):
-        encrypted_message = public_key.encrypt(
-            message,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
-            )
+    def decrypt(self, key, data):
+        salt = data[:8]
+        iv = data[8:20]
+        tag = data[-16:]
+        ciphertext = data[20:-16]
+        kdf = HKDF(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            info=b'emproto',
+            backend=self.backend
         )
-        return encrypted_message
-
-    def decrypt_message(self, encrypted_message, private_key):
-        decrypted_message = private_key.decrypt(
-            encrypted_message,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
-            )
+        aes_key = kdf.derive(key)
+        cipher = Cipher(
+            algorithms.AES(aes_key),
+            modes.GCM(iv, tag),
+            backend=self.backend
         )
-        return decrypted_message
-
-    def encrypt_file(self, file_path, key):
-        with open(file_path, 'rb') as file:
-            data = file.read()
-        aesgcm = AESGCM(key)
-        nonce = os.urandom(12)
-        encrypted_data = aesgcm.encrypt(nonce, data, None)
-        return nonce + encrypted_data
-
-    def decrypt_file(self, encrypted_data, key):
-        nonce = encrypted_data[:12]
-        ciphertext = encrypted_data[12:]
-        aesgcm = AESGCM(key)
-        decrypted_data = aesgcm.decrypt(nonce, ciphertext, None)
-        return decrypted_data
+        decryptor = cipher.decryptor()
+        return decryptor.update(ciphertext) + decryptor.finalize()
