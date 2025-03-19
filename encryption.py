@@ -82,7 +82,7 @@ def encrypt_message(auth_key, message):
     salt = os.urandom(8)
     session_id = os.urandom(8)
     seq_number = struct.pack("Q", int.from_bytes(os.urandom(8), 'big') % (2**32))  # Sekvenční číslo
-    timestamp = struct.pack("Q", int.from_bytes(os.urandom(8), 'big'))  # Časové razítko
+    timestamp = struct.pack("Q", int.from_bytes(os.urandom(8), 'big'))  # časové razítko
     payload = salt + session_id + seq_number + timestamp + message.encode()
 
     msg_key = hashlib.sha256(payload).digest()[:16]
@@ -165,3 +165,10 @@ def deobfuscate_data(obfuscated_data):
     """Deobfuskuje data do jejich původní podoby"""
     key = obfuscated_data[:32]
     return aes_gcm_decrypt(key, obfuscated_data[32:44], obfuscated_data[44:], obfuscated_data[28:44])
+
+# === Funkce pro pravidelnou obnovu klíčů ===
+def rotate_keys(current_private_key, peer_public_key):
+    """Pravidelně mění šifrovací klíče pro zajištění forward secrecy"""
+    new_private_key, new_public_key = generate_ecdh_keypair()
+    shared_key = derive_shared_key(new_private_key, peer_public_key)
+    return new_private_key, new_public_key, shared_key
