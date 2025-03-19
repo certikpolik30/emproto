@@ -1,9 +1,12 @@
 import socket
 import struct
+from encryption import obfuscate_data, deobfuscate_data  # Import the required functions
 
 # === Odesílání a přijímání zpráv přes TCP ===
 def send_encrypted_message_tcp(sock, encrypted_message):
     """Odešle šifrovanou zprávu přes TCP socket"""
+    if encrypted_message is None:
+        raise ValueError("Encrypted message cannot be None")  # Add a check for None
     obfuscated_message = obfuscate_data(encrypted_message)
     message_length = len(obfuscated_message)
     sock.sendall(struct.pack("!I", message_length))
@@ -21,6 +24,8 @@ def receive_encrypted_message_tcp(sock):
 # === Odesílání a přijímání zpráv přes UDP ===
 def send_encrypted_message_udp(sock, encrypted_message, address):
     """Odešle šifrovanou zprávu přes UDP socket"""
+    if encrypted_message is None:
+        raise ValueError("Encrypted message cannot be None")  # Add a check for None
     obfuscated_message = obfuscate_data(encrypted_message)
     message_length = len(obfuscated_message)
     sock.sendto(struct.pack("!I", message_length) + obfuscated_message, address)
@@ -37,6 +42,8 @@ def receive_encrypted_message_udp(sock):
 # === Odesílání a přijímání souborů přes TCP ===
 def send_encrypted_file_tcp(sock, encrypted_file_data, file_name):
     """Odešle šifrovaný soubor přes TCP socket"""
+    if encrypted_file_data is None:
+        raise ValueError("Encrypted file data cannot be None")  # Add a check for None
     obfuscated_file_data = obfuscate_data(encrypted_file_data)
     file_name_encoded = file_name.encode()
     file_name_length = len(file_name_encoded)
@@ -64,6 +71,8 @@ def receive_encrypted_file_tcp(sock):
 # === Odesílání a přijímání souborů přes UDP ===
 def send_encrypted_file_udp(sock, encrypted_file_data, file_name, address):
     """Odešle šifrovaný soubor přes UDP socket"""
+    if encrypted_file_data is None:
+        raise ValueError("Encrypted file data cannot be None")  # Add a check for None
     obfuscated_file_data = obfuscate_data(encrypted_file_data)
     file_name_encoded = file_name.encode()
     file_name_length = len(file_name_encoded)
