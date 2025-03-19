@@ -27,7 +27,9 @@ class Encryption:
 
     def derive_shared_key(self, peer_public_bytes):
         """ Odvození sdíleného klíče pomocí ECDH """
-        peer_public_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), peer_public_bytes)
+        peer_public_key = ec.EllipticCurvePublicKey.from_encoded_point(
+            ec.SECP256R1(), peer_public_bytes, encoding=self.encryption.serialization.Encoding.X962
+        )
         shared_secret = self.ec_private_key.exchange(ec.ECDH(), peer_public_key)
 
         # KDF pro odvození AES-256 klíče
