@@ -157,14 +157,22 @@ def authenticate_ecdh(ecdh_public_key):
     ))
 
 # === Obfuskování ===
-def obfuscate_data(data):
-    """Obfuskuje data pro skrývání jejich struktury"""
-    return aes_gcm_encrypt(os.urandom(32), data)[1]
+def obfuscate_data(data, metadata=b''):
+    """Obfuskuje data pro skrývání jejich struktury a šifruje metadata"""
+    encrypted_metadata = aes_gcm_encrypt(os.urandom(32), metadata)[1]
+    return aes_gcm_encrypt(os.urandom(32), data + encrypted_metadata)[1]
 
 def deobfuscate_data(obfuscated_data):
     """Deobfuskuje data do jejich původní podoby"""
     key = obfuscated_data[:32]
-    return aes_gcm_decrypt(key, obfuscated_data[32:44], obfuscated_data[44:], obfuscated_data[28:44])
+    decrypted_data = aes_gcm_decrypt(key, obfuscated_data[32:44], obfuscated_data[44:], obfuscated_data[28:44])
+    
+    # Rozdělení dat a metadat
+    data_length = len(decrypted_data) - 32  # Předpokládáme, že metadata mají pevnou délku 32 bajtů
+    data = decrypted_data[:data_length]
+    metadata = decrypted_data[data_length:]
+    
+    return data, metadata
 
 # === Funkce pro pravidelnou obnovu klíčů ===
 def rotate_keys(current_private_key, peer_public_key):
