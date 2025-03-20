@@ -13,7 +13,7 @@ class ECDH:
     @staticmethod
     def generate_keypair():
         """Generates ECDH key pair"""
-        private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
+        private_key = ec.generate_private_key(ec.SECP384R1(), default_backend())  # Changed to SECP384R1
         public_key = private_key.public_key()
         return private_key, public_key
 
@@ -22,8 +22,8 @@ class ECDH:
         """Derives shared key using ECDH"""
         shared_secret = private_key.exchange(ec.ECDH(), peer_public_key)
         derived_key = HKDF(
-            algorithm=hashes.SHA256(),
-            length=32,
+            algorithm=hashes.SHA3_512(),  # Changed to SHA3-512
+            length=64,  # Updated length for SHA3-512
             salt=None,
             info=b'EMProto Key Exchange',
             backend=default_backend()
@@ -52,31 +52,31 @@ class AESGCM:
 class RSA:
     @staticmethod
     def generate_keypair():
-        """Generates RSA-2048 key pair"""
-        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
+        """Generates RSA-4096 key pair"""
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=4096, backend=default_backend())  # Changed to RSA-4096
         public_key = private_key.public_key()
         return private_key, public_key
 
     @staticmethod
     def encrypt(public_key, data):
-        """Encrypts data using RSA-2048"""
+        """Encrypts data using RSA-4096"""
         return public_key.encrypt(
             data,
             padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
+                mgf=padding.MGF1(algorithm=hashes.SHA3_512()),  # Changed to SHA3-512
+                algorithm=hashes.SHA3_512(),  # Changed to SHA3-512
                 label=None
             )
         )
 
     @staticmethod
     def decrypt(private_key, ciphertext):
-        """Decrypts data using RSA-2048"""
+        """Decrypts data using RSA-4096"""
         return private_key.decrypt(
             ciphertext,
             padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
+                mgf=padding.MGF1(algorithm=hashes.SHA3_512()),  # Changed to SHA3-512
+                algorithm=hashes.SHA3_512(),  # Changed to SHA3-512
                 label=None
             )
         )
@@ -91,8 +91,8 @@ class MessageEncryption:
         timestamp = struct.pack("Q", int.from_bytes(os.urandom(8), 'big'))  # Timestamp
         payload = salt + session_id + seq_number + timestamp + message.encode()
 
-        msg_key = hashlib.sha256(payload).digest()[:16]
-        derived_key = hashlib.sha256(auth_key + msg_key).digest()
+        msg_key = hashlib.sha3_512(payload).digest()[:32]  # Changed to SHA3-512
+        derived_key = hashlib.sha3_512(auth_key + msg_key).digest()  # Changed to SHA3-512
         iv, ciphertext, tag = AESGCM.encrypt(derived_key, payload)
 
         return msg_key + iv + tag + ciphertext
@@ -100,12 +100,12 @@ class MessageEncryption:
     @staticmethod
     def decrypt(auth_key, encrypted_message):
         """Decrypts a text message (AES-256-GCM)"""
-        msg_key = encrypted_message[:16]
-        iv = encrypted_message[16:28]
-        tag = encrypted_message[28:44]
-        ciphertext = encrypted_message[44:]
+        msg_key = encrypted_message[:32]  # Updated for SHA3-512
+        iv = encrypted_message[32:44]
+        tag = encrypted_message[44:60]
+        ciphertext = encrypted_message[60:]
 
-        derived_key = hashlib.sha256(auth_key + msg_key).digest()
+        derived_key = hashlib.sha3_512(auth_key + msg_key).digest()  # Changed to SHA3-512
         decrypted_payload = AESGCM.decrypt(derived_key, iv, ciphertext, tag)
 
         salt = decrypted_payload[:8]
@@ -129,8 +129,8 @@ class FileEncryption:
         timestamp = struct.pack("Q", int.from_bytes(os.urandom(8), 'big'))
         payload = salt + session_id + seq_number + timestamp + file_data
 
-        msg_key = hashlib.sha256(payload).digest()[:16]
-        derived_key = hashlib.sha256(auth_key + msg_key).digest()
+        msg_key = hashlib.sha3_512(payload).digest()[:32]  # Changed to SHA3-512
+        derived_key = hashlib.sha3_512(auth_key + msg_key).digest()  # Changed to SHA3-512
         iv, ciphertext, tag = AESGCM.encrypt(derived_key, payload)
 
         return msg_key + iv + tag + ciphertext
@@ -138,12 +138,12 @@ class FileEncryption:
     @staticmethod
     def decrypt(auth_key, encrypted_data, output_path):
         """Decrypts a file using AES-256-GCM"""
-        msg_key = encrypted_data[:16]
-        iv = encrypted_data[16:28]
-        tag = encrypted_data[28:44]
-        ciphertext = encrypted_data[44:]
+        msg_key = encrypted_data[:32]  # Updated for SHA3-512
+        iv = encrypted_data[32:44]
+        tag = encrypted_data[44:60]
+        ciphertext = encrypted_data[60:]
 
-        derived_key = hashlib.sha256(auth_key + msg_key).digest()
+        derived_key = hashlib.sha3_512(auth_key + msg_key).digest()  # Changed to SHA3-512
         decrypted_payload = AESGCM.decrypt(derived_key, iv, ciphertext, tag)
 
         with open(output_path, 'wb') as f:
@@ -153,7 +153,7 @@ class SecurityUtils:
     @staticmethod
     def verify_message_integrity(auth_key, decrypted_message, expected_msg_key):
         """Verifies message integrity after decryption"""
-        calculated_msg_key = hashlib.sha256(auth_key + decrypted_message.encode()).digest()[:16]
+        calculated_msg_key = hashlib.sha3_512(auth_key + decrypted_message.encode()).digest()[:32]  # Changed to SHA3-512
         return hmac.compare_digest(calculated_msg_key, expected_msg_key)
 
 # Add CCA protection mechanism
@@ -161,10 +161,10 @@ class CCAProtection:
     @staticmethod
     def protect_against_cca(derived_key, ciphertext):
         """Protects against chosen-ciphertext attacks (CCA)"""
-        return hmac.new(derived_key, ciphertext, hashlib.sha256).digest()
+        return hmac.new(derived_key, ciphertext, hashlib.sha3_512).digest()  # Changed to SHA3-512
 
     @staticmethod
     def verify_cca_protection(derived_key, ciphertext, expected_cca_tag):
         """Verifies CCA protection"""
-        calculated_cca_tag = hmac.new(derived_key, ciphertext, hashlib.sha256).digest()
+        calculated_cca_tag = hmac.new(derived_key, ciphertext, hashlib.sha3_512).digest()  # Changed to SHA3-512
         return hmac.compare_digest(calculated_cca_tag, expected_cca_tag)
