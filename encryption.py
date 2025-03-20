@@ -156,19 +156,39 @@ def authenticate_ecdh(ecdh_public_key):
         format=serialization.PublicFormat.SubjectPublicKeyInfo
     ))
 
-# === Obfuskování ===
-def obfuscate_data(data, metadata=b''):
-    """Obfuskuje data pro skrývání jejich struktury a šifruje metadata"""
-    encrypted_metadata = aes_gcm_encrypt(os.urandom(32), metadata)[1]
-    return aes_gcm_encrypt(os.urandom(32), data + encrypted_metadata)[1]
+# === Obfuscation Functions ===
+def random_padding(data, block_size=16):
+    """Adds random padding to the data to make it a multiple of block_size"""
+    padding_length = block_size - (len(data) % block_size)
+    if padding_length == block_size:
+        padding_length = 0
+    padding = os.urandom(padding_length)
+    return data + padding
 
-def deobfuscate_data(obfuscated_data):
-    """Deobfuskuje data do jejich původní podoby"""
-    key = obfuscated_data[:32]
-    decrypted_data = aes_gcm_decrypt(key, obfuscated_data[32:44], obfuscated_data[44:], obfuscated_data[28:44])
+def multi_layer_encryption(key, data, layers=3):
+    """Applies multiple layers of encryption to the data"""
+    encrypted_data = data
+    for _ in range(layers):
+        key_layer = os.urandom(32)
+        encrypted_data = aes_gcm_encrypt(key_layer, encrypted_data)[1]
+    return encrypted_data
+
+def obfuscate_data(data, metadata=b''):
+    """Obfuscates data to hide its structure and encrypts metadata"""
+    encrypted_metadata = aes_gcm_encrypt(os.urandom(32), metadata)[1]
+    data_with_padding = random_padding(data + encrypted_metadata)
+    obfuscated_data = multi_layer_encryption(os.urandom(32), data_with_padding)
+    return obfuscated_data
+
+def deobfuscate_data(obfuscated_data, layers=3):
+    """Deobfuscates data to its original form"""
+    decrypted_data = obfuscated_data
+    for _ in range(layers):
+        key_layer = decrypted_data[:32]
+        decrypted_data = aes_gcm_decrypt(key_layer, decrypted_data[32:44], decrypted_data[44:], decrypted_data[28:44])
     
-    # Rozdělení dat a metadat
-    data_length = len(decrypted_data) - 32  # Předpokládáme, že metadata mají pevnou délku 32 bajtů
+    # Split data and metadata
+    data_length = len(decrypted_data) - 32  # Assuming metadata has a fixed length of 32 bytes
     data = decrypted_data[:data_length]
     metadata = decrypted_data[data_length:]
     
