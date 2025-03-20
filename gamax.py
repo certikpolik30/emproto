@@ -1,77 +1,137 @@
-from Crypto.Cipher import AES
-from Crypto.Random import get_random_bytes
-from Crypto.Util.Padding import pad, unpad
-from Crypto.Hash import SHA256
-from Crypto.Signature import pkcs1_15
-from Crypto.PublicKey import RSA
 import hashlib
+from Crypto.Util.Padding import pad, unpad
+from Crypto.Random import get_random_bytes
 
-# Generate a secure 256-bit key in hexadecimal format
-def generate_key():
-    key = get_random_bytes(32)  # 256 bits = 32 bytes
-    return key.hex()
+class GamaX:
+    def __init__(self, key=None):
+        """
+        Initialize the GamaX algorithm with a custom 256-bit key.
+        If no key is provided, generate a random key.
+        """
+        if key is None:
+            key = get_random_bytes(32)  # 256-bit key = 32 bytes
+        
+        self.key = key
+        
+        if len(self.key) != 32:
+            raise ValueError("Key must be 256 bits (32 bytes).")
+        
+        # Initialize the MAC key (hash of the original key)
+        self.mac_key = hashlib.sha256(self.key).digest()
 
-# Custom XOR operation for mixing data
-def xor_data(data, key):
-    return bytes([a ^ b for a, b in zip(data, key)])
+    def encrypt(self, data, nonce=None):
+        """
+        Encrypt data using the custom GamaX encryption algorithm.
+        """
+        if nonce is None:
+            nonce = get_random_bytes(16)  # 128-bit nonce (IV)
 
-# GamaX encryption function
-def gamaX_encrypt(data, key_hex):
-    key = bytes.fromhex(key_hex)  # Convert key from hex to bytes
-    iv = get_random_bytes(16)  # Generate a random 16-byte IV
+        # Ensure data is padded to a 16-byte boundary using PKCS7
+        data = pad(data.encode(), 16)
 
-    # Apply XOR to the data with the key for additional confusion (simple example)
-    data_xored = xor_data(data, key[:len(data)])  # XOR the data with part of the key
+        # XOR the data with the key in rounds for diffusion
+        encrypted_data = self._custom_encryption(data, nonce)
 
-    # Padding using PKCS7
-    data_padded = pad(data_xored, AES.block_size)
+        # Generate MAC (Message Authentication Code) for integrity
+        mac = self._generate_mac(encrypted_data)
 
-    # AES encryption with the key and IV
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    ciphertext = cipher.encrypt(data_padded)
+        return encrypted_data, mac, nonce
 
-    # Generate a MAC (Message Authentication Code) using SHA256 for integrity
-    mac = SHA256.new(data + iv + ciphertext).digest()
+    def decrypt(self, encrypted_data, mac, nonce):
+        """
+        Decrypt data using the custom GamaX decryption algorithm.
+        """
+        # Verify MAC for integrity
+        if mac != self._generate_mac(encrypted_data):
+            raise ValueError("MAC verification failed. Data integrity compromised.")
+        
+        # Decrypt the data by reversing the custom encryption process
+        decrypted_data = self._custom_decryption(encrypted_data, nonce)
 
-    return iv + ciphertext + mac
+        # Unpad the data to recover the original message
+        decrypted_data = unpad(decrypted_data, 16).decode()
 
-# GamaX decryption function
-def gamaX_decrypt(ciphertext_mac, key_hex):
-    key = bytes.fromhex(key_hex)
-    
-    iv = ciphertext_mac[:16]  # The first 16 bytes are the IV
-    ciphertext = ciphertext_mac[16:-32]  # The next bytes are the actual ciphertext
-    mac = ciphertext_mac[-32:]  # The last 32 bytes are the MAC
+        return decrypted_data
 
-    # Verify MAC to ensure data integrity
-    expected_mac = SHA256.new(ciphertext + iv + ciphertext).digest()
-    if expected_mac != mac:
-        raise ValueError("MAC verification failed. Data might have been altered.")
+    def _custom_encryption(self, data, nonce):
+        """
+        Custom encryption logic using XOR, key expansion, and round-based transformations.
+        """
+        # Split the data into blocks of 16 bytes (128 bits)
+        num_blocks = len(data) // 16
+        encrypted_data = bytearray()
 
-    # Decrypt using AES
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    data_padded = cipher.decrypt(ciphertext)
+        for i in range(num_blocks):
+            block = data[i * 16:(i + 1) * 16]
 
-    # Remove padding
-    data_xored = unpad(data_padded, AES.block_size)
+            # Generate a custom round key using nonce and key
+            round_key = self._generate_round_key(nonce, i)
 
-    # Reverse the XOR operation (using the same key portion for simplicity)
-    data = xor_data(data_xored, key[:len(data_xored)])
+            # XOR the block with the round key
+            encrypted_block = bytes([block[j] ^ round_key[j] for j in range(16)])
 
-    return data
+            encrypted_data.extend(encrypted_block)
 
-# Example usage
+        return encrypted_data
+
+    def _custom_decryption(self, encrypted_data, nonce):
+        """
+        Custom decryption logic which reverses the encryption process.
+        """
+        num_blocks = len(encrypted_data) // 16
+        decrypted_data = bytearray()
+
+        for i in range(num_blocks):
+            block = encrypted_data[i * 16:(i + 1) * 16]
+
+            # Generate the round key for decryption (same as encryption)
+            round_key = self._generate_round_key(nonce, i)
+
+            # XOR the encrypted block with the round key to decrypt
+            decrypted_block = bytes([block[j] ^ round_key[j] for j in range(16)])
+
+            decrypted_data.extend(decrypted_block)
+
+        return decrypted_data
+
+    def _generate_round_key(self, nonce, round_index):
+        """
+        Generate a custom round key by combining nonce, round index, and the key.
+        """
+        # Start with the nonce and round index, and hash them with the key
+        combined = nonce + round_index.to_bytes(4, 'big') + self.key
+        round_key = hashlib.sha256(combined).digest()[:16]  # Get the first 16 bytes (128 bits)
+        return round_key
+
+    def _generate_mac(self, data):
+        """
+        Generate a MAC for integrity verification using SHA-256.
+        """
+        return hashlib.sha256(self.mac_key + data).digest()
+
+    def generate_key(self):
+        """
+        Generate a secure random 256-bit key and return it as a hexadecimal string.
+        """
+        return self.key.hex()
+
+
+# Usage Example:
 if __name__ == "__main__":
-    key_hex = generate_key()
-    print(f"Generated Key (Hex): {key_hex}")
+    # Generate a random 256-bit key for GamaX
+    key = get_random_bytes(32)
     
-    # Sample plaintext data
-    data = b"Secret message"
-    
-    # Encrypt data
-    encrypted_data = gamaX_encrypt(data, key_hex)
-    print(f"Encrypted Data: {encrypted_data.hex()}")
+    # Initialize the GamaX algorithm with the generated key
+    gamaX = GamaX(key)
 
-    # Decrypt data
-    decrypted_data = gamaX_decrypt(encrypted_data, key_hex)
-    print(f"Decrypted Data: {decrypted_data.decode()}")
+    # Encrypt a message
+    message = "This is a secret message."
+    encrypted_data, mac, nonce = gamaX.encrypt(message)
+    
+    print(f"Encrypted Data: {encrypted_data.hex()}")
+    print(f"MAC: {mac.hex()}")
+    print(f"Nonce: {nonce.hex()}")
+
+    # Decrypt the message
+    decrypted_message = gamaX.decrypt(encrypted_data, mac, nonce)
+    print(f"Decrypted Message: {decrypted_message}")
