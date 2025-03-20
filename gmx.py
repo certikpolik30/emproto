@@ -51,9 +51,13 @@ class gamax:
     def encrypt(self, data, nonce=None):
         """
         Encrypt the data using multiple layers of encryption with AES-like structures.
+        Convert text to hexadecimal before encryption.
         """
         if nonce is None:
             nonce = get_random_bytes(32)  # Increased nonce size for added security
+        
+        # Convert the data to hexadecimal string
+        data = self.text_to_hex(data)
         data = pad(data.encode(), 64)  # Use larger block size (64 bytes)
 
         encrypted_data = self._apply_permutation_network(data, nonce)
@@ -63,11 +67,15 @@ class gamax:
     def decrypt(self, encrypted_data, mac, nonce):
         """
         Decrypt the data using multiple layers of encryption and verify the MAC.
+        Convert encrypted data from hexadecimal back to text.
         """
         if mac != self._generate_mac(encrypted_data):
             raise ValueError("MAC verification failed")
         decrypted_data = self._apply_permutation_network(encrypted_data, nonce, decrypt=True)
-        return unpad(decrypted_data, 64).decode()
+        
+        # Convert the decrypted data from hex back to text
+        decrypted_text = self.hex_to_text(unpad(decrypted_data, 64).decode())
+        return decrypted_text
 
     def _apply_permutation_network(self, data, nonce, decrypt=False):
         """
@@ -153,6 +161,23 @@ class gamax:
         # Decrypt the data and verify the MAC
         decrypted_data = self.decrypt(encrypted_data, mac, nonce)
         
+        # Save the decrypted content to the output file
+        with open(output_path, 'wb') as file:
+            file.write(decrypted_data.encode())  # Write decrypted data as bytes
+        print(f"File decrypted and saved to {output_path}")
+
+    def text_to_hex(self, text):
+        """
+        Convert text to hexadecimal representation.
+        """
+        return text.encode().hex()
+
+    def hex_to_text(self, hex_data):
+        """
+        Convert hexadecimal string back to text.
+        """
+        return bytes.fromhex(hex_data).decode()
+
         # Save the decrypted content to the output file
         with open(output_path, 'wb') as file:
             file.write(decrypted_data.encode())  # Write decrypted data as bytes
