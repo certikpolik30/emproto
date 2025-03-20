@@ -7,7 +7,6 @@ setup(
     version="0.1.0",
     description="A Super Strong Cipher for secure encryption and decryption.",
     author="Alfisene Keita",
-    author_email="your.email@example.com",
     packages=find_packages(),
     install_requires=[
         'pycryptodome',
