@@ -1,1 +1,1 @@
-from .gamax import gamax
+from .gmx import gamax
