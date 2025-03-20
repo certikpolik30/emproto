@@ -2,7 +2,7 @@ import socket
 import struct
 import asyncio  # Added for asynchronous operations
 import zlib  # Added for compression
-from .encryption import Obfuscation  # Removed CCAProtection import
+from .encryption import ECDH, Obfuscation  # Removed CCAProtection import
 
 class TCPTransport:
     @staticmethod
@@ -29,6 +29,25 @@ class TCPTransport:
         obfuscated_message = zlib.decompress(compressed_message)  # Decompress data
         decrypted_message = Obfuscation.deobfuscate_data(obfuscated_message)
         return decrypted_message
+
+    @staticmethod
+    async def exchange_keys(sock):
+        """Exchange public keys and derive shared key"""
+        private_key, public_key = ECDH.generate_keypair()
+        public_key_bytes = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        await sock.sendall(struct.pack("!I", len(public_key_bytes)))
+        await sock.sendall(public_key_bytes)
+
+        peer_key_length = struct.unpack("!I", await sock.recv(4))[0]
+        peer_key_bytes = await sock.recv(peer_key_length)
+        peer_public_key = serialization.load_pem_public_key(peer_key_bytes, backend=default_backend())
+
+        shared_key = ECDH.derive_shared_key(private_key, peer_public_key)
+        verification_code, qr_code = ECDH.generate_verification_code(public_key, peer_public_key)
+        return shared_key, verification_code, qr_code
 
     @staticmethod
     async def send_encrypted_file(sock, encrypted_file_data, file_name, derived_key):
