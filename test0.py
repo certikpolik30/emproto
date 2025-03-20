@@ -2,7 +2,7 @@ from cryptogamax import gamax  # Import the GamaX class from the cryptogamax lib
 
 def test_gamax_encryption():
     # Step 1: Generate a key using the GamaX algorithm
-    key = cryptogamax.generate_key()  # Key generation, assuming this method exists
+    key = gamax.generate_key()  # Key generation, assuming this method exists
 
     # Step 2: Initialize the GamaX cipher with the generated key
     gamax_cipher = gamax(key)
