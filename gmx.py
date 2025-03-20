@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
 
-class SuperStrongCipher:
+class gamax:
     def __init__(self, key=None):
         """
         Initialize the cipher with a key. If no key is provided, generate one.
