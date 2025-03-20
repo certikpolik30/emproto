@@ -1,7 +1,7 @@
 import asyncio
 import socket
 from transport import UDPTransport
-from encryption import ECDH, MessageEncryption
+from .encryption import ECDH, MessageEncryption
 
 class UDPServer:
     def __init__(self, host, port):
