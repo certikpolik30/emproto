@@ -19,6 +19,8 @@ def receive_encrypted_message_tcp(sock):
         return None
     message_length = struct.unpack("!I", message_length_data)[0]
     obfuscated_message = sock.recv(message_length)
+    if not obfuscated_message:
+        return None
     return deobfuscate_data(obfuscated_message)
 
 # === Odesílání a přijímání zpráv přes UDP ===
@@ -37,6 +39,8 @@ def receive_encrypted_message_udp(sock):
         return None
     message_length = struct.unpack("!I", message_length_data)[0]
     obfuscated_message, _ = sock.recvfrom(message_length)
+    if not obfuscated_message:
+        return None
     return deobfuscate_data(obfuscated_message)
 
 # === Odesílání a přijímání souborů přes TCP ===
