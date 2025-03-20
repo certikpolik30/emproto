@@ -110,4 +110,41 @@ class gamax:
         Generate a new encryption key and return it.
         """
         return get_random_bytes(64)  # 512-bit key for extra security
+        
+def encrypt_file(self, file_path, output_path, nonce=None):
+    """
+    Encrypt a file and save the encrypted data to a new file.
+    """
+    with open(file_path, 'rb') as file:
+        data = file.read()  # Read the file content
+    
+    encrypted_data, mac, nonce = self.encrypt(data, nonce)
+    
+    # Save the encrypted data, MAC, and nonce to the output file
+    with open(output_path, 'wb') as file:
+        file.write(nonce)  # Write nonce
+        file.write(mac)  # Write MAC
+        file.write(encrypted_data)  # Write encrypted data
+    print(f"File encrypted and saved to {output_path}")
+
+def decrypt_file(self, encrypted_file_path, output_path):
+    """
+    Decrypt an encrypted file and save the decrypted content to a new file.
+    """
+    with open(encrypted_file_path, 'rb') as file:
+        nonce = file.read(16)  # First 16 bytes for nonce
+        mac = file.read(64)  # Next 64 bytes for MAC
+        encrypted_data = file.read()  # Remaining data is encrypted content
+    
+    # Decrypt the data and verify the MAC
+    decrypted_data = self.decrypt(encrypted_data, mac, nonce)
+    
+    # Save the decrypted content to the output file
+    with open(output_path, 'wb') as file:
+        file.write(decrypted_data.encode())  # Write decrypted data as bytes
+    print(f"File decrypted and saved to {output_path}")
+
+# Add the methods to the gamax class
+setattr(gamax, 'encrypt_file', encrypt_file)
+setattr(gamax, 'decrypt_file', decrypt_file)
 
