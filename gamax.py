@@ -114,3 +114,24 @@ class GamaX:
         Generate a secure random 256-bit key and return it as a hexadecimal string.
         """
         return self.key.hex()
+
+
+# Usage Example:
+if __name__ == "__main__":
+    # Generate a random 256-bit key for GamaX
+    key = get_random_bytes(32)
+    
+    # Initialize the GamaX algorithm with the generated key
+    gamaX = GamaX(key)
+
+    # Encrypt a message
+    message = "ČAU TO JE TEST"
+    encrypted_data, mac, nonce = gamaX.encrypt(message)
+    
+    print(f"Encrypted Data: {encrypted_data.hex()}")
+    print(f"MAC: {mac.hex()}")
+    print(f"Nonce: {nonce.hex()}")
+
+    # Decrypt the message
+    decrypted_message = gamaX.decrypt(encrypted_data, mac, nonce)
+    print(f"Decrypted Message: {decrypted_message}")
