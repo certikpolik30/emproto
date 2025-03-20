@@ -2,6 +2,7 @@ import os
 import struct
 import hashlib
 import hmac
+import zlib  # Added for compression
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.asymmetric import rsa, ec
@@ -47,6 +48,23 @@ class AESGCM:
         cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag), backend=default_backend())
         decryptor = cipher.decryptor()
         decryptor.authenticate_additional_data(associated_data)
+        return decryptor.update(ciphertext) + decryptor.finalize()
+
+class AESCTR:
+    @staticmethod
+    def encrypt(key, plaintext):
+        """Encrypts plaintext using AES-256-CTR"""
+        iv = os.urandom(16)  # CTR nonce
+        cipher = Cipher(algorithms.AES(key), modes.CTR(iv), backend=default_backend())
+        encryptor = cipher.encryptor()
+        ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+        return iv, ciphertext
+
+    @staticmethod
+    def decrypt(key, iv, ciphertext):
+        """Decrypts ciphertext using AES-256-CTR"""
+        cipher = Cipher(algorithms.AES(key), modes.CTR(iv), backend=default_backend())
+        decryptor = cipher.decryptor()
         return decryptor.update(ciphertext) + decryptor.finalize()
 
 class RSA:
