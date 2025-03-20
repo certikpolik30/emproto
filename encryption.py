@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+import qrcode  # Added for QR code generation
 
 class KeyStore:
     """Class to manage key storage and rotation"""
@@ -85,24 +86,16 @@ class ECDH:
         ).derive(shared_secret)
         return derived_key
 
-class AESGCM:
     @staticmethod
-    def encrypt(key, plaintext, associated_data=b''):
-        """Encrypts plaintext using AES-256-GCM"""
-        iv = os.urandom(12)  # GCM nonce
-        cipher = Cipher(algorithms.AES(key), modes.GCM(iv), backend=default_backend())
-        encryptor = cipher.encryptor()
-        encryptor.authenticate_additional_data(associated_data)
-        ciphertext = encryptor.update(plaintext) + encryptor.finalize()
-        return iv, ciphertext, encryptor.tag
-
-    @staticmethod
-    def decrypt(key, iv, ciphertext, tag, associated_data=b''):
-        """Decrypts ciphertext using AES-256-GCM"""
-        cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag), backend=default_backend())
-        decryptor = cipher.decryptor()
-        decryptor.authenticate_additional_data(associated_data)
-        return decryptor.update(ciphertext) + decryptor.finalize()
+    def generate_security_code(public_key1, public_key2):
+        """Generates a security code from two public keys"""
+        combined_keys = public_key1.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo) + \
+                        public_key2.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
+        hash_value = hashlib.sha3_512(combined_keys).hexdigest()
+        numeric_code = ''.join(str(int(hash_value[i:i+2], 16)) for i in range(0, len(hash_value), 2))
+        qr = qrcode.make(numeric_code)
+        qr.save("security_code.png")
+        return numeric_code
 
 class AESCTR:
     @staticmethod
@@ -159,7 +152,7 @@ class MessageEncryption:
         self.keystore = KeyStore()
 
     def encrypt(self, message):
-        """Encrypts a text message (AES-256-GCM)"""
+        """Encrypts a text message (AES-256-CTR)"""
         salt = os.urandom(8)
         session_id = os.urandom(8)
         seq_number = struct.pack("Q", int.from_bytes(os.urandom(8), 'big') % (2**32))  # Sequence number
@@ -168,22 +161,21 @@ class MessageEncryption:
 
         msg_key = hashlib.sha3_512(payload).digest()[:32]  # Changed to SHA3-512
         derived_key = hashlib.sha3_512(self.auth_key + msg_key).digest()  # Changed to SHA3-512
-        iv, ciphertext, tag = AESGCM.encrypt(derived_key, payload)
+        iv, ciphertext = AESCTR.encrypt(derived_key, payload)
 
         # Rotate keys and save the new key
         self.keystore.rotate_keys(derived_key)
 
-        return msg_key + iv + tag + ciphertext
+        return msg_key + iv + ciphertext
 
     def decrypt(self, encrypted_message):
-        """Decrypts a text message (AES-256-GCM)"""
+        """Decrypts a text message (AES-256-CTR)"""
         msg_key = encrypted_message[:32]  # Updated for SHA3-512
-        iv = encrypted_message[32:44]
-        tag = encrypted_message[44:60]
-        ciphertext = encrypted_message[60:]
+        iv = encrypted_message[32:48]
+        ciphertext = encrypted_message[48:]
 
         derived_key = hashlib.sha3_512(self.auth_key + msg_key).digest()  # Changed to SHA3-512
-        decrypted_payload = AESGCM.decrypt(derived_key, iv, ciphertext, tag)
+        decrypted_payload = AESCTR.decrypt(derived_key, iv, ciphertext)
 
         salt = decrypted_payload[:8]
         session_id = decrypted_payload[8:16]
@@ -199,7 +191,7 @@ class FileEncryption:
         self.keystore = KeyStore()
 
     def encrypt(self, file_path):
-        """Encrypts a file using AES-256-GCM"""
+        """Encrypts a file using AES-256-CTR"""
         with open(file_path, 'rb') as f:
             file_data = f.read()
 
@@ -211,22 +203,21 @@ class FileEncryption:
 
         msg_key = hashlib.sha3_512(payload).digest()[:32]  # Changed to SHA3-512
         derived_key = hashlib.sha3_512(self.auth_key + msg_key).digest()  # Changed to SHA3-512
-        iv, ciphertext, tag = AESGCM.encrypt(derived_key, payload)
+        iv, ciphertext = AESCTR.encrypt(derived_key, payload)
 
         # Rotate keys and save the new key
         self.keystore.rotate_keys(derived_key)
 
-        return msg_key + iv + tag + ciphertext
+        return msg_key + iv + ciphertext
 
     def decrypt(self, encrypted_data, output_path):
-        """Decrypts a file using AES-256-GCM"""
+        """Decrypts a file using AES-256-CTR"""
         msg_key = encrypted_data[:32]  # Updated for SHA3-512
-        iv = encrypted_data[32:44]
-        tag = encrypted_data[44:60]
-        ciphertext = encrypted_data[60:]
+        iv = encrypted_data[32:48]
+        ciphertext = encrypted_data[48:]
 
         derived_key = hashlib.sha3_512(self.auth_key + msg_key).digest()  # Changed to SHA3-512
-        decrypted_payload = AESGCM.decrypt(derived_key, iv, ciphertext, tag)
+        decrypted_payload = AESCTR.decrypt(derived_key, iv, ciphertext)
 
         with open(output_path, 'wb') as f:
             f.write(decrypted_payload[32:])  # Remove Salt, Session_ID, sequence number, and timestamp
@@ -237,16 +228,3 @@ class SecurityUtils:
         """Verifies message integrity after decryption"""
         calculated_msg_key = hashlib.sha3_512(auth_key + decrypted_message.encode()).digest()[:32]  # Changed to SHA3-512
         return hmac.compare_digest(calculated_msg_key, expected_msg_key)
-
-# Add CCA protection mechanism
-class CCAProtection:
-    @staticmethod
-    def protect_against_cca(derived_key, ciphertext):
-        """Protects against chosen-ciphertext attacks (CCA)"""
-        return hmac.new(derived_key, ciphertext, hashlib.sha3_512).digest()  # Changed to SHA3-512
-
-    @staticmethod
-    def verify_cca_protection(derived_key, ciphertext, expected_cca_tag):
-        """Verifies CCA protection"""
-        calculated_cca_tag = hmac.new(derived_key, ciphertext, hashlib.sha3_512).digest()  # Changed to SHA3-512
-        return hmac.compare_digest(calculated_cca_tag, expected_cca_tag)
