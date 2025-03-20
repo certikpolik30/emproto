@@ -1,6 +1,6 @@
 import asyncio
 import socket
-from transport import UDPTransport
+from .transport import UDPTransport
 from .encryption import ECDH, MessageEncryption
 
 class UDPClient:
