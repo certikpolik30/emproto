@@ -25,8 +25,8 @@ class TCPTransport:
         if not obfuscated_message:
             return None
         decrypted_message_with_tag = Obfuscation.deobfuscate_data(obfuscated_message)
-        decrypted_message = decrypted_message_with_tag[:-32]  # remove CCA tag
-        expected_cca_tag = decrypted_message_with_tag[-32:]
+        decrypted_message = decrypted_message_with_tag[:-64]  # remove CCA tag
+        expected_cca_tag = decrypted_message_with_tag[-64:]  # Updated for SHA3-512
         if not CCAProtection.verify_cca_protection(derived_key, decrypted_message, expected_cca_tag):
             raise ValueError("CCA protection verification failed")
         return decrypted_message
@@ -63,8 +63,8 @@ class TCPTransport:
             return None, None
         
         decrypted_file_data_with_tag = Obfuscation.deobfuscate_data(obfuscated_file_data)
-        decrypted_file_data = decrypted_file_data_with_tag[:-32]  # remove CCA tag
-        expected_cca_tag = decrypted_file_data_with_tag[-32:]
+        decrypted_file_data = decrypted_file_data_with_tag[:-64]  # remove CCA tag
+        expected_cca_tag = decrypted_file_data_with_tag[-64:]  # Updated for SHA3-512
         if not CCAProtection.verify_cca_protection(derived_key, decrypted_file_data, expected_cca_tag):
             raise ValueError("CCA protection verification failed")
         return file_name, decrypted_file_data
@@ -91,8 +91,8 @@ class UDPTransport:
         if not obfuscated_message:
             return None
         decrypted_message_with_tag = Obfuscation.deobfuscate_data(obfuscated_message)
-        decrypted_message = decrypted_message_with_tag[:-32]  # remove CCA tag
-        expected_cca_tag = decrypted_message_with_tag[-32:]
+        decrypted_message = decrypted_message_with_tag[:-64]  # remove CCA tag
+        expected_cca_tag = decrypted_message_with_tag[-64:]  # Updated for SHA3-512
         if not CCAProtection.verify_cca_protection(derived_key, decrypted_message, expected_cca_tag):
             raise ValueError("CCA protection verification failed")
         return decrypted_message
@@ -126,8 +126,8 @@ class UDPTransport:
             return None, None
         
         decrypted_file_data_with_tag = Obfuscation.deobfuscate_data(obfuscated_file_data)
-        decrypted_file_data = decrypted_file_data_with_tag[:-32]  # remove CCA tag
-        expected_cca_tag = decrypted_file_data_with_tag[-32:]
+        decrypted_file_data = decrypted_file_data_with_tag[:-64]  # remove CCA tag
+        expected_cca_tag = decrypted_file_data_with_tag[-64:]  # Updated for SHA3-512
         if not CCAProtection.verify_cca_protection(derived_key, decrypted_file_data, expected_cca_tag):
             raise ValueError("CCA protection verification failed")
         return file_name.decode(), decrypted_file_data
