@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="cryptogamax",
-    version="1.0",
+    version="2.0",
     description="A Super Strong Cipher for secure encryption and decryption.",
     author="Alfisene Keita",
     packages=find_packages(),
