@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa, ec
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
-from pqcrypto.kem.kyber import generate_keypair as kyber_generate_keypair, encrypt as kyber_encrypt, decrypt as kyber_decrypt
+from kyber.kem import generate_keypair as kyber_generate_keypair, encrypt as kyber_encrypt, decrypt as kyber_decrypt
 
 class ECDH:
     @staticmethod
