@@ -3,7 +3,7 @@ import os
 
 def test_gamax():
     # 1. Vygeneruj nový klíč a ulož ho
-    key = GamaX.generate_key()
+    key = gamax.generate_key()
     key_path = "gamax_key.bin"
     with open(key_path, "wb") as f:
         f.write(key)
