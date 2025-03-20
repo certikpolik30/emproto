@@ -8,95 +8,25 @@ from cryptography.hazmat.primitives.asymmetric import rsa, ec
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
-from pqcrypto.kyber512 import generate_keypair as kyber_generate_keypair
-from pqcrypto.kyber512 import encrypt as kyber_encrypt
-from pqcrypto.kyber512 import decrypt as kyber_decrypt
+import nacl.utils
+from nacl.public import PrivateKey, PublicKey, Box
+from nacl.signing import SigningKey, VerifyKey
+from nacl.hash import blake2b
 
-class ECDH:
+class X3DH:
     @staticmethod
     def generate_keypair():
-        """Generates ECDH key pair"""
-        private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
-        public_key = private_key.public_key()
+        """Generates X3DH key pair"""
+        private_key = PrivateKey.generate()
+        public_key = private_key.public_key
         return private_key, public_key
 
     @staticmethod
     def derive_shared_key(private_key, peer_public_key):
-        """Derives shared key using ECDH"""
-        shared_secret = private_key.exchange(ec.ECDH(), peer_public_key)
-        derived_key = HKDF(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=None,
-            info=b'EMProto Key Exchange',
-            backend=default_backend()
-        ).derive(shared_secret)
-        return derived_key
-
-class Kyber512:
-    @staticmethod
-    def generate_keypair():
-        """Generates Kyber512 key pair"""
-        public_key, private_key = kyber_generate_keypair()
-        return private_key, public_key
-
-    @staticmethod
-    def encapsulate_key(public_key):
-        """Encapsulates a key using Kyber512"""
-        ciphertext, shared_secret = kyber_encrypt(public_key)
-        return ciphertext, shared_secret
-
-    @staticmethod
-    def decapsulate_key(private_key, ciphertext):
-        """Decapsulates a key using Kyber512"""
-        shared_secret = kyber_decrypt(private_key, ciphertext)
-        return shared_secret
-
-class HybridKeyExchange:
-    @staticmethod
-    def generate_keypair():
-        """Generates ECDH and Kyber512 key pairs"""
-        ecdh_private_key, ecdh_public_key = ECDH.generate_keypair()
-        kyber_private_key, kyber_public_key = Kyber512.generate_keypair()
-        return (ecdh_private_key, kyber_private_key), (ecdh_public_key, kyber_public_key)
-
-    @staticmethod
-    def derive_shared_key(private_keys, peer_public_keys):
-        """Derives shared key using hybrid ECDH and Kyber512"""
-        ecdh_private_key, kyber_private_key = private_keys
-        ecdh_public_key, kyber_public_key = peer_public_keys
-        
-        ecdh_shared_key = ECDH.derive_shared_key(ecdh_private_key, ecdh_public_key)
-        kyber_ciphertext, kyber_shared_key = Kyber512.encapsulate_key(kyber_public_key)
-        
-        derived_key = HKDF(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=None,
-            info=b'EMProto Hybrid Key Exchange',
-            backend=default_backend()
-        ).derive(ecdh_shared_key + kyber_shared_key)
-        
-        return derived_key, kyber_ciphertext
-
-    @staticmethod
-    def decapsulate_shared_key(private_keys, peer_public_keys, kyber_ciphertext):
-        """Decapsulates shared key using hybrid ECDH and Kyber512"""
-        ecdh_private_key, kyber_private_key = private_keys
-        ecdh_public_key, kyber_public_key = peer_public_keys
-        
-        ecdh_shared_key = ECDH.derive_shared_key(ecdh_private_key, ecdh_public_key)
-        kyber_shared_key = Kyber512.decapsulate_key(kyber_private_key, kyber_ciphertext)
-        
-        derived_key = HKDF(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=None,
-            info=b'EMProto Hybrid Key Exchange',
-            backend=default_backend()
-        ).derive(ecdh_shared_key + kyber_shared_key)
-        
-        return derived_key
+        """Derives shared key using X3DH"""
+        box = Box(private_key, peer_public_key)
+        shared_key = box.shared_key()
+        return shared_key
 
 class AESGCM:
     @staticmethod
@@ -270,6 +200,6 @@ class KeyRotation:
     @staticmethod
     def rotate_keys(current_private_key, peer_public_key):
         """Regularly changes encryption keys to ensure forward secrecy"""
-        new_private_key, new_public_key = ECDH.generate_keypair()
-        shared_key = ECDH.derive_shared_key(new_private_key, peer_public_key)
+        new_private_key, new_public_key = X3DH.generate_keypair()
+        shared_key = X3DH.derive_shared_key(new_private_key, peer_public_key)
         return new_private_key, new_public_key, shared_key
