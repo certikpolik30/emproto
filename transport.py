@@ -2,7 +2,7 @@ import socket
 import struct
 import requests
 import websocket
-from .encryption import Obfuscation
+from .encryption import Obfuscation, HybridKeyExchange
 
 class TCPTransport:
     @staticmethod
