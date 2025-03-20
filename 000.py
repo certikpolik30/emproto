@@ -1,5 +1,12 @@
 from cryptogamax import gamax
 
+def is_hex(s):
+    try:
+        bytes.fromhex(s)
+        return True
+    except ValueError:
+        return False
+
 def encryptor():
     key_save_path = input("Zadej cestu pro uložení šifrovacího klíče (např. key.gamax): ")
     cipher = gamax()
@@ -12,15 +19,19 @@ def encryptor():
     print(f"Ciphertext (hex): {encrypted_data.hex()}")
     print(f"MAC (hex): {mac.hex()}")
     print(f"Nonce (hex): {nonce.hex()}")
-    print(f"Klíč byl uložen do {key_save_path}.")
+    print(f"\nKlíč byl uložen do {key_save_path}.")
 
 def decryptor():
     key_load_path = input("Zadej cestu k souboru s klíčem (např. key.gamax): ")
     cipher = gamax.load_key(key_load_path)
 
-    ciphertext_hex = input("Zadej ciphertext (v hex): ")
-    mac_hex = input("Zadej MAC (v hex): ")
-    nonce_hex = input("Zadej nonce (v hex): ")
+    ciphertext_hex = input("Zadej ciphertext (v hex): ").replace(" ", "").strip()
+    mac_hex = input("Zadej MAC (v hex): ").replace(" ", "").strip()
+    nonce_hex = input("Zadej nonce (v hex): ").replace(" ", "").strip()
+
+    if not all(map(is_hex, [ciphertext_hex, mac_hex, nonce_hex])):
+        print("Chyba: Jeden ze vstupů není validní hexadecimální řetězec.")
+        return
 
     encrypted_data = bytes.fromhex(ciphertext_hex)
     mac = bytes.fromhex(mac_hex)
@@ -31,7 +42,7 @@ def decryptor():
         print("\n--- Dešifrovaný výstup ---")
         print(f"Dešifrovaný text: {decrypted_text}")
     except ValueError as e:
-        print(f"Chyba: {str(e)}")
+        print(f"Chyba při dešifrování: {str(e)}")
 
 if __name__ == "__main__":
     mode = input("Chceš šifrovat (e) nebo dešifrovat (d)? ")
@@ -40,4 +51,4 @@ if __name__ == "__main__":
     elif mode.lower() == "d":
         decryptor()
     else:
-        print("Neplatná volba.")
+        print("Neplatná volba. Zadej 'e' pro šifrování nebo 'd' pro dešifrování.")
