@@ -1,318 +1,222 @@
 import socket
 import struct
-from .encryption import obfuscate_data, deobfuscate_data  # Import the required functions
 import requests
 import websocket
+from .encryption import Obfuscation
 
-# === Odesílání a přijímání zpráv přes TCP ===
-def send_encrypted_message_tcp(sock, encrypted_message):
-    """Odešle šifrovanou zprávu přes TCP socket"""
-    if encrypted_message is None:
-        raise ValueError("Encrypted message cannot be None")  # Add a check for None
-    obfuscated_message = obfuscate_data(encrypted_message)
-    message_length = len(obfuscated_message)
-    sock.sendall(struct.pack("!I", message_length))
-    sock.sendall(obfuscated_message)
+class TCPTransport:
+    @staticmethod
+    def send_encrypted_message(sock, encrypted_message):
+        """Sends an encrypted message over a TCP socket"""
+        if encrypted_message is None:
+            raise ValueError("Encrypted message cannot be None")
+        obfuscated_message = Obfuscation.obfuscate_data(encrypted_message)
+        message_length = len(obfuscated_message)
+        sock.sendall(struct.pack("!I", message_length))
+        sock.sendall(obfuscated_message)
 
-def receive_encrypted_message_tcp(sock):
-    """Přijme šifrovanou zprávu přes TCP socket"""
-    message_length_data = sock.recv(4)
-    if not message_length_data:
-        return None
-    message_length = struct.unpack("!I", message_length_data)[0]
-    obfuscated_message = sock.recv(message_length)
-    if not obfuscated_message:
-        return None
-    return deobfuscate_data(obfuscated_message)
+    @staticmethod
+    def receive_encrypted_message(sock):
+        """Receives an encrypted message over a TCP socket"""
+        message_length_data = sock.recv(4)
+        if not message_length_data:
+            return None
+        message_length = struct.unpack("!I", message_length_data)[0]
+        obfuscated_message = sock.recv(message_length)
+        if not obfuscated_message:
+            return None
+        return Obfuscation.deobfuscate_data(obfuscated_message)
 
-# === Odesílání a přijímání zpráv přes UDP ===
-def send_encrypted_message_udp(sock, encrypted_message, address):
-    """Odešle šifrovanou zprávu přes UDP socket"""
-    if encrypted_message is None:
-        raise ValueError("Encrypted message cannot be None")  # Add a check for None
-    obfuscated_message = obfuscate_data(encrypted_message)
-    message_length = len(obfuscated_message)
-    sock.sendto(struct.pack("!I", message_length) + obfuscated_message, address)
+    @staticmethod
+    def send_encrypted_file(sock, encrypted_file_data, file_name):
+        """Sends an encrypted file over a TCP socket"""
+        if encrypted_file_data is None:
+            raise ValueError("Encrypted file data cannot be None")
+        obfuscated_file_data = Obfuscation.obfuscate_data(encrypted_file_data)
+        file_name_encoded = file_name.encode()
+        file_name_length = len(file_name_encoded)
+        file_data_length = len(obfuscated_file_data)
 
-def receive_encrypted_message_udp(sock):
-    """Přijme šifrovanou zprávu přes UDP socket"""
-    message_length_data, _ = sock.recvfrom(4)
-    if not message_length_data:
-        return None
-    message_length = struct.unpack("!I", message_length_data)[0]
-    obfuscated_message, _ = sock.recvfrom(message_length)
-    if not obfuscated_message:
-        return None
-    return deobfuscate_data(obfuscated_message)
+        sock.sendall(struct.pack("!I", file_name_length))
+        sock.sendall(file_name_encoded)
+        sock.sendall(struct.pack("!Q", file_data_length))
+        sock.sendall(obfuscated_file_data)
 
-# === Odesílání a přijímání souborů přes TCP ===
-def send_encrypted_file_tcp(sock, encrypted_file_data, file_name):
-    """Odešle šifrovaný soubor přes TCP socket"""
-    if encrypted_file_data is None:
-        raise ValueError("Encrypted file data cannot be None")  # Add a check for None
-    obfuscated_file_data = obfuscate_data(encrypted_file_data)
-    file_name_encoded = file_name.encode()
-    file_name_length = len(file_name_encoded)
-    file_data_length = len(obfuscated_file_data)
+    @staticmethod
+    def receive_encrypted_file(sock):
+        """Receives an encrypted file over a TCP socket"""
+        file_name_length_data = sock.recv(4)
+        if not file_name_length_data:
+            return None, None
+        file_name_length = struct.unpack("!I", file_name_length_data)[0]
+        file_name = sock.recv(file_name_length).decode()
 
-    sock.sendall(struct.pack("!I", file_name_length))
-    sock.sendall(file_name_encoded)
-    sock.sendall(struct.pack("!Q", file_data_length))
-    sock.sendall(obfuscated_file_data)
+        file_data_length_data = sock.recv(8)
+        file_data_length = struct.unpack("!Q", file_data_length_data)[0]
+        obfuscated_file_data = sock.recv(file_data_length)
 
-def receive_encrypted_file_tcp(sock):
-    """Přijme šifrovaný soubor přes TCP socket"""
-    file_name_length_data = sock.recv(4)
-    if not file_name_length_data:
-        return None, None
-    file_name_length = struct.unpack("!I", file_name_length_data)[0]
-    file_name = sock.recv(file_name_length).decode()
+        return file_name, Obfuscation.deobfuscate_data(obfuscated_file_data)
 
-    file_data_length_data = sock.recv(8)
-    file_data_length = struct.unpack("!Q", file_data_length_data)[0]
-    obfuscated_file_data = sock.recv(file_data_length)
-
-    return file_name, deobfuscate_data(obfuscated_file_data)
-
-# === Odesílání a přijímání souborů přes UDP ===
-def send_encrypted_file_udp(sock, encrypted_file_data, file_name, address):
-    """Odešle šifrovaný soubor přes UDP socket"""
-    if encrypted_file_data is None:
-        raise ValueError("Encrypted file data cannot be None")  # Add a check for None
-    obfuscated_file_data = obfuscate_data(encrypted_file_data)
-    file_name_encoded = file_name.encode()
-    file_name_length = len(file_name_encoded)
-    file_data_length = len(obfuscated_file_data)
-
-    sock.sendto(struct.pack("!I", file_name_length) + file_name_encoded + struct.pack("!Q", file_data_length) + obfuscated_file_data, address)
-
-def receive_encrypted_file_udp(sock):
-    """Přijme šifrovaný soubor přes UDP socket"""
-    file_name_length_data, _ = sock.recvfrom(4)
-    if not file_name_length_data:
-        return None, None
-    file_name_length = struct.unpack("!I", file_name_length_data)[0]
-    file_name, _ = sock.recvfrom(file_name_length)
-
-    file_data_length_data, _ = sock.recvfrom(8)
-    file_data_length = struct.unpack("!Q", file_data_length_data)[0]
-    obfuscated_file_data, _ = sock.recvfrom(file_data_length)
-
-    return file_name.decode(), deobfuscate_data(obfuscated_file_data)
-
-# === Odesílání a přijímání zpráv přes HTTP ===
-def send_encrypted_message_http(url, encrypted_message):
-    """Odešle šifrovanou zprávu přes HTTP"""
-    if encrypted_message is None:
-        raise ValueError("Encrypted message cannot be None")
-    obfuscated_message = obfuscate_data(encrypted_message)
-    response = requests.post(url, data=obfuscated_message)
-    return response.status_code
-
-def receive_encrypted_message_http(url):
-    """Přijme šifrovanou zprávu přes HTTP"""
-    response = requests.get(url)
-    if response.status_code != 200:
-        return None
-    obfuscated_message = response.content
-    return deobfuscate_data(obfuscated_message)
-
-# === Odesílání a přijímání zpráv přes HTTPS ===
-def send_encrypted_message_https(url, encrypted_message):
-    """Odešle šifrovanou zprávu přes HTTPS"""
-    if encrypted_message is None:
-        raise ValueError("Encrypted message cannot be None")
-    obfuscated_message = obfuscate_data(encrypted_message)
-    response = requests.post(url, data=obfuscated_message, verify=True)
-    return response.status_code
-
-def receive_encrypted_message_https(url):
-    """Přijme šifrovanou zprávu přes HTTPS"""
-    response = requests.get(url, verify=True)
-    if response.status_code != 200:
-        return None
-    obfuscated_message = response.content
-    return deobfuscate_data(obfuscated_message)
-
-# === Odesílání a přijímání zpráv přes WS (plain WebSockets) ===
-def send_encrypted_message_ws(ws_url, encrypted_message):
-    """Odešle šifrovanou zprávu přes WS (plain WebSockets)"""
-    if encrypted_message is None:
-        raise ValueError("Encrypted message cannot be None")
-    obfuscated_message = obfuscate_data(encrypted_message)
-    ws = websocket.WebSocket()
-    ws.connect(ws_url)
-    ws.send(obfuscated_message)
-    ws.close()
-
-def receive_encrypted_message_ws(ws_url):
-    """Přijme šifrovanou zprávu přes WS (plain WebSockets)"""
-    ws = websocket.WebSocket()
-    ws.connect(ws_url)
-    obfuscated_message = ws.recv()
-    ws.close()
-    return deobfuscate_data(obfuscated_message)
-
-# === Odesílání a přijímání souborů přes HTTP ===
-def send_encrypted_file_http(url, encrypted_file_data, file_name):
-    """Odešle šifrovaný soubor přes HTTP"""
-    if encrypted_file_data is None:
-        raise ValueError("Encrypted file data cannot be None")
-    obfuscated_file_data = obfuscate_data(encrypted_file_data)
-    files = {'file': (file_name, obfuscated_file_data)}
-    response = requests.post(url, files=files)
-    return response.status_code
-
-def receive_encrypted_file_http(url):
-    """Přijme šifrovaný soubor přes HTTP"""
-    response = requests.get(url)
-    if response.status_code != 200:
-        return None, None
-    file_name = response.headers.get('Content-Disposition').split('filename=')[1]
-    obfuscated_file_data = response.content
-    return file_name, deobfuscate_data(obfuscated_file_data)
-
-# === Odesílání a přijímání souborů přes HTTPS ===
-def send_encrypted_file_https(url, encrypted_file_data, file_name):
-    """Odešle šifrovaný soubor přes HTTPS"""
-    if encrypted_file_data is None:
-        raise ValueError("Encrypted file data cannot be None")
-    obfuscated_file_data = obfuscate_data(encrypted_file_data)
-    files = {'file': (file_name, obfuscated_file_data)}
-    response = requests.post(url, files=files, verify=True)
-    return response.status_code
-
-def receive_encrypted_file_https(url):
-    """Přijme šifrovaný soubor přes HTTPS"""
-    response = requests.get(url, verify=True)
-    if response.status_code != 200:
-        return None, None
-    file_name = response.headers.get('Content-Disposition').split('filename=')[1]
-    obfuscated_file_data = response.content
-    return file_name, deobfuscate_data(obfuscated_file_data)
-
-# === Odesílání a přijímání souborů přes WS (plain WebSockets) ===
-def send_encrypted_file_ws(ws_url, encrypted_file_data, file_name):
-    """Odešle šifrovaný soubor přes WS (plain WebSockets)"""
-    if encrypted_file_data is None:
-        raise ValueError("Encrypted file data cannot be None")
-    obfuscated_file_data = obfuscate_data(encrypted_file_data)
-    ws = websocket.WebSocket()
-    ws.connect(ws_url)
-    ws.send(file_name)
-    ws.send(obfuscated_file_data)
-    ws.close()
-
-def receive_encrypted_file_ws(ws_url):
-    """Přijme šifrovaný soubor přes WS (plain WebSockets)"""
-    ws = websocket.WebSocket()
-    ws.connect(ws_url)
-    file_name = ws.recv()
-    obfuscated_file_data = ws.recv()
-    ws.close()
-    return file_name, deobfuscate_data(obfuscated_file_data)
-
-# === Optimalizace transportní vrstvy ===
-def send_encrypted_message_udp_reliable(sock, encrypted_message, address, retries=3):
-    """Odešle šifrovanou zprávu přes UDP socket s vlastními mechanismy spolehlivosti"""
-    if encrypted_message is None:
-        raise ValueError("Encrypted message cannot be None")
-    obfuscated_message = obfuscate_data(encrypted_message)
-    message_length = len(obfuscated_message)
-    
-    for _ in range(retries):
+class UDPTransport:
+    @staticmethod
+    def send_encrypted_message(sock, encrypted_message, address):
+        """Sends an encrypted message over a UDP socket"""
+        if encrypted_message is None:
+            raise ValueError("Encrypted message cannot be None")
+        obfuscated_message = Obfuscation.obfuscate_data(encrypted_message)
+        message_length = len(obfuscated_message)
         sock.sendto(struct.pack("!I", message_length) + obfuscated_message, address)
-        try:
-            ack, _ = sock.recvfrom(2)
-            if ack == b'OK':
-                break
-        except socket.timeout:
-            continue
-    else:
-        raise Exception("Failed to send message reliably")
 
-def receive_encrypted_message_udp_reliable(sock):
-    """Přijme šifrovanou zprávu přes UDP socket s vlastními mechanismy spolehlivosti"""
-    message_length_data, address = sock.recvfrom(4)
-    if not message_length_data:
-        return None, address
-    message_length = struct.unpack("!I", message_length_data)[0]
-    obfuscated_message, address = sock.recvfrom(message_length)
-    if not obfuscated_message:
-        return None, address
-    sock.sendto(b'OK', address)
-    return deobfuscate_data(obfuscated_message), address
+    @staticmethod
+    def receive_encrypted_message(sock):
+        """Receives an encrypted message over a UDP socket"""
+        message_length_data, _ = sock.recvfrom(4)
+        if not message_length_data:
+            return None
+        message_length = struct.unpack("!I", message_length_data)[0]
+        obfuscated_message, _ = sock.recvfrom(message_length)
+        if not obfuscated_message:
+            return None
+        return Obfuscation.deobfuscate_data(obfuscated_message)
 
-# === Multiplexování ===
-class MultiplexedConnection:
-    def __init__(self, sock):
-        self.sock = sock
-        self.streams = {}
+    @staticmethod
+    def send_encrypted_file(sock, encrypted_file_data, file_name, address):
+        """Sends an encrypted file over a UDP socket"""
+        if encrypted_file_data is None:
+            raise ValueError("Encrypted file data cannot be None")
+        obfuscated_file_data = Obfuscation.obfuscate_data(encrypted_file_data)
+        file_name_encoded = file_name.encode()
+        file_name_length = len(file_name_encoded)
+        file_data_length = len(obfuscated_file_data)
 
-    def send_message(self, stream_id, message):
-        if stream_id not in self.streams:
-            self.streams[stream_id] = b""
-        self.streams[stream_id] += message
-        self.flush_stream(stream_id)
+        sock.sendto(struct.pack("!I", file_name_length) + file_name_encoded + struct.pack("!Q", file_data_length) + obfuscated_file_data, address)
 
-    def receive_message(self, stream_id):
-        if stream_id not in self.streams:
-            self.streams[stream_id] = b""
-        return self.streams[stream_id]
+    @staticmethod
+    def receive_encrypted_file(sock):
+        """Receives an encrypted file over a UDP socket"""
+        file_name_length_data, _ = sock.recvfrom(4)
+        if not file_name_length_data:
+            return None, None
+        file_name_length = struct.unpack("!I", file_name_length_data)[0]
+        file_name, _ = sock.recvfrom(file_name_length)
 
-    def flush_stream(self, stream_id):
-        if stream_id in self.streams and self.streams[stream_id]:
-            message = self.streams[stream_id]
-            self.sock.sendall(struct.pack("!I", stream_id) + struct.pack("!I", len(message)) + message)
-            self.streams[stream_id] = b""
+        file_data_length_data, _ = sock.recvfrom(8)
+        file_data_length = struct.unpack("!Q", file_data_length_data)[0]
+        obfuscated_file_data, _ = sock.recvfrom(file_data_length)
 
-    def close_stream(self, stream_id):
-        if stream_id in self.streams:
-            del self.streams[stream_id]
+        return file_name.decode(), Obfuscation.deobfuscate_data(obfuscated_file_data)
 
-# === NAT Traversal ===
-def stun_request(sock, stun_server):
-    """Odešle STUN požadavek pro překonání NAT"""
-    stun_message = b"\x00\x01" + os.urandom(16)  # Binding Request
-    sock.sendto(stun_message, stun_server)
-    response, _ = sock.recvfrom(1024)
-    return response
+class HTTPTransport:
+    @staticmethod
+    def send_encrypted_message(url, encrypted_message, use_https=True):
+        """Sends an encrypted message over HTTP/HTTPS"""
+        if encrypted_message is None:
+            raise ValueError("Encrypted message cannot be None")
+        obfuscated_message = Obfuscation.obfuscate_data(encrypted_message)
+        response = requests.post(url, data=obfuscated_message, verify=use_https)
+        return response.status_code
 
-def turn_request(sock, turn_server):
-    """Odešle TURN požadavek pro překonání NAT"""
-    turn_message = b"\x00\x03" + os.urandom(16)  # Allocate Request
-    sock.sendto(turn_message, turn_server)
-    response, _ = sock.recvfrom(1024)
-    return response
+    @staticmethod
+    def receive_encrypted_message(url, use_https=True):
+        """Receives an encrypted message over HTTP/HTTPS"""
+        response = requests.get(url, verify=use_https)
+        if response.status_code != 200:
+            return None
+        obfuscated_message = response.content
+        return Obfuscation.deobfuscate_data(obfuscated_message)
 
-# === Sharding ===
-def shard_users(users, num_shards):
-    """Rozdělí uživatele do různých shardů"""
-    shards = [[] for _ in range(num_shards)]
-    for i, user in enumerate(users):
-        shards[i % num_shards].append(user)
-    return shards
+    @staticmethod
+    def send_encrypted_file(url, encrypted_file_data, file_name, use_https=True):
+        """Sends an encrypted file over HTTP/HTTPS"""
+        if encrypted_file_data is None:
+            raise ValueError("Encrypted file data cannot be None")
+        obfuscated_file_data = Obfuscation.obfuscate_data(encrypted_file_data)
+        files = {'file': (file_name, obfuscated_file_data)}
+        response = requests.post(url, files=files, verify=use_https)
+        return response.status_code
 
-# === Optimalizace latence ===
-def optimize_latency(path):
-    """Optimalizuje latenci minimalizováním počtu skoků mezi uzly"""
-    optimized_path = sorted(path, key=lambda x: x.latency)
-    return optimized_path
+    @staticmethod
+    def receive_encrypted_file(url, use_https=True):
+        """Receives an encrypted file over HTTP/HTTPS"""
+        response = requests.get(url, verify=use_https)
+        if response.status_code != 200:
+            return None, None
+        file_name = response.headers.get('Content-Disposition').split('filename=')[1]
+        obfuscated_file_data = response.content
+        return file_name, Obfuscation.deobfuscate_data(obfuscated_file_data)
 
-# === Logika pro opětovné připojení a zotavení ===
-class ReconnectHandler:
-    def __init__(self, max_retries, base_delay):
-        self.max_retries = max_retries
-        self.base_delay = base_delay
+class WebSocketTransport:
+    @staticmethod
+    def send_encrypted_message(ws_url, encrypted_message):
+        """Sends an encrypted message over WebSockets"""
+        if encrypted_message is None:
+            raise ValueError("Encrypted message cannot be None")
+        obfuscated_message = Obfuscation.obfuscate_data(encrypted_message)
+        ws = websocket.WebSocket()
+        ws.connect(ws_url)
+        ws.send(obfuscated_message)
+        ws.close()
 
-    def reconnect(self, connect_func):
-        retries = 0
-        delay = self.base_delay
-        while retries < self.max_retries:
+    @staticmethod
+    def receive_encrypted_message(ws_url):
+        """Receives an encrypted message over WebSockets"""
+        ws = websocket.WebSocket()
+        ws.connect(ws_url)
+        obfuscated_message = ws.recv()
+        ws.close()
+        return Obfuscation.deobfuscate_data(obfuscated_message)
+
+    @staticmethod
+    def send_encrypted_file(ws_url, encrypted_file_data, file_name):
+        """Sends an encrypted file over WebSockets"""
+        if encrypted_file_data is None:
+            raise ValueError("Encrypted file data cannot be None")
+        obfuscated_file_data = Obfuscation.obfuscate_data(encrypted_file_data)
+        ws = websocket.WebSocket()
+        ws.connect(ws_url)
+        ws.send(file_name)
+        ws.send(obfuscated_file_data)
+        ws.close()
+
+    @staticmethod
+    def receive_encrypted_file(ws_url):
+        """Receives an encrypted file over WebSockets"""
+        ws = websocket.WebSocket()
+        ws.connect(ws_url)
+        file_name = ws.recv()
+        obfuscated_file_data = ws.recv()
+        ws.close()
+        return file_name, Obfuscation.deobfuscate_data(obfuscated_file_data)
+
+class ReliableUDPTransport:
+    @staticmethod
+    def send_encrypted_message(sock, encrypted_message, address, retries=3):
+        """Sends an encrypted message over a UDP socket with reliability mechanisms"""
+        if encrypted_message is None:
+            raise ValueError("Encrypted message cannot be None")
+        obfuscated_message = Obfuscation.obfuscate_data(encrypted_message)
+        message_length = len(obfuscated_message)
+        
+        for _ in range(retries):
+            sock.sendto(struct.pack("!I", message_length) + obfuscated_message, address)
             try:
-                return connect_func()
-            except Exception as e:
-                retries += 1
-                time.sleep(delay)
-                delay *= 2
-        raise Exception("Failed to reconnect after multiple attempts")
+                ack, _ = sock.recvfrom(2)
+                if ack == b'OK':
+                    break
+            except socket.timeout:
+                continue
+        else:
+            raise Exception("Failed to send message reliably")
+
+    @staticmethod
+    def receive_encrypted_message(sock):
+        """Receives an encrypted message over a UDP socket with reliability mechanisms"""
+        message_length_data, address = sock.recvfrom(4)
+        if not message_length_data:
+            return None, address
+        message_length = struct.unpack("!I", message_length_data)[0]
+        obfuscated_message, address = sock.recvfrom(message_length)
+        if not obfuscated_message:
+            return None, address
+        sock.sendto(b'OK', address)
+        return Obfuscation.deobfuscate_data(obfuscated_message), address
