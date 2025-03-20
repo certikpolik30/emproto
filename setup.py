@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='vmproto',
-    version='1.0',
+    name='mvproto',
+    version='0.1',
     packages=find_packages(),
     description='A secure communication protocol for e2ee.',
     author='Alfisene Keita',
