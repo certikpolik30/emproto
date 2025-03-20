@@ -100,7 +100,7 @@ class gamax:
             raise FileNotFoundError(f"Key file {filepath} not found.")
         with open(filepath, 'rb') as file:
             key = file.read()
-        return SuperStrongCipher(key)
+        return gamax(key)
 
     @staticmethod
     def generate_key():
