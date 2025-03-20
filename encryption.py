@@ -9,6 +9,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa, ec
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
+import json
+import time
 
 class ECDH:
     @staticmethod
@@ -173,4 +175,50 @@ class SecurityUtils:
         calculated_msg_key = hashlib.sha3_512(auth_key + decrypted_message.encode()).digest()[:32]  # Changed to SHA3-512
         return hmac.compare_digest(calculated_msg_key, expected_msg_key)
 
-# Removed CCA protection mechanism
+class SecureKeyStorage:
+    """Class for secure key storage and rotation"""
+    def __init__(self, storage_path):
+        self.storage_path = storage_path
+        self.keys = self.load_keys()
+
+    def load_keys(self):
+        """Loads keys from storage"""
+        if os.path.exists(self.storage_path):
+            with open(self.storage_path, 'r') as f:
+                return json.load(f)
+        else:
+            return {}
+
+    def save_keys(self):
+        """Saves keys to storage"""
+        with open(self.storage_path, 'w') as f:
+            json.dump(self.keys, f)
+
+    def generate_new_key(self):
+        """Generates a new key and stores it"""
+        new_key = os.urandom(32)
+        key_id = hashlib.sha256(new_key).hexdigest()
+        self.keys[key_id] = {
+            'key': new_key.hex(),
+            'timestamp': time.time()
+        }
+        self.save_keys()
+        return key_id, new_key
+
+    def get_key(self, key_id):
+        """Retrieves a key by its ID"""
+        key_data = self.keys.get(key_id)
+        if key_data:
+            return bytes.fromhex(key_data['key'])
+        else:
+            return None
+
+    def rotate_keys(self, rotation_interval):
+        """Rotates keys that are older than the specified interval"""
+        current_time = time.time()
+        for key_id in list(self.keys.keys()):
+            if current_time - self.keys[key_id]['timestamp'] > rotation_interval:
+                del self.keys[key_id]
+                self.generate_new_key()
+
+        self.save_keys()
