@@ -1,4 +1,4 @@
-from cryptogamax import GamaX  # předpokládáme, že jsi to tak pojmenoval
+from cryptogamax import gamaX  # předpokládáme, že jsi to tak pojmenoval
 import os
 
 def test_gamax():
