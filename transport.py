@@ -158,17 +158,3 @@ class WebSocketTransport:
         ws.close()
 
     @staticmethod
-    def receive_encrypted_message(ws_url):
-        """Receives an encrypted message over WebSockets"""
-        ws = websocket.WebSocket()
-        ws.connect(ws_url)
-        obfuscated_message = ws.recv()
-        ws.close()
-        return Obfuscation.deobfuscate_data(obfuscated_message)
-
-    @staticmethod
-    def send_encrypted_file(ws_url, encrypted_file_data, file_name):
-        """Sends an encrypted file over WebSockets"""
-        if encrypted_file_data is None:
-            raise ValueError("Encrypted file data cannot be None")
-        obfuscated
