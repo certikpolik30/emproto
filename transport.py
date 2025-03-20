@@ -1,6 +1,6 @@
 import socket
 import struct
-from encryption import obfuscate_data, deobfuscate_data  # Import the required functions
+from .encryption import obfuscate_data, deobfuscate_data  # Import the required functions
 
 # === Odesílání a přijímání zpráv přes TCP ===
 def send_encrypted_message_tcp(sock, encrypted_message):
