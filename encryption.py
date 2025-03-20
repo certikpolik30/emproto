@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa, ec
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
-from pqcrypto.kem import generate_keypair as pqcrypto_generate_keypair, encrypt as pqcrypto_encrypt, decrypt as pqcrypto_decrypt
+from pqcrypto.kem.kyber512 import generate_keypair as kyber_generate_keypair, encrypt as kyber_encrypt, decrypt as kyber_decrypt
 
 class ECDH:
     @staticmethod
@@ -35,19 +35,19 @@ class Kyber512:
     @staticmethod
     def generate_keypair():
         """Generates Kyber512 key pair"""
-        public_key, private_key = pqcrypto_generate_keypair()
+        public_key, private_key = kyber_generate_keypair()
         return private_key, public_key
 
     @staticmethod
     def encapsulate_key(public_key):
         """Encapsulates a key using Kyber512"""
-        ciphertext, shared_secret = pqcrypto_encrypt(public_key)
+        ciphertext, shared_secret = kyber_encrypt(public_key)
         return ciphertext, shared_secret
 
     @staticmethod
     def decapsulate_key(private_key, ciphertext):
         """Decapsulates a key using Kyber512"""
-        shared_secret = pqcrypto_decrypt(private_key, ciphertext)
+        shared_secret = kyber_decrypt(private_key, ciphertext)
         return shared_secret
 
 class HybridKeyExchange:
