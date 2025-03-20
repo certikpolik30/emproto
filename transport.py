@@ -1,8 +1,7 @@
 import socket
 import struct
 import requests
-import websocket
-from .encryption import Obfuscation, HybridKeyExchange
+from .encryption import Obfuscation, X3DH
 
 class TCPTransport:
     @staticmethod
@@ -108,53 +107,39 @@ class UDPTransport:
 
 class HTTPTransport:
     @staticmethod
-    def send_encrypted_message(url, encrypted_message, use_https=True):
-        """Sends an encrypted message over HTTP/HTTPS"""
+    def send_encrypted_message(url, encrypted_message):
+        """Sends an encrypted message over HTTP"""
         if encrypted_message is None:
             raise ValueError("Encrypted message cannot be None")
         obfuscated_message = Obfuscation.obfuscate_data(encrypted_message)
-        response = requests.post(url, data=obfuscated_message, verify=use_https)
+        response = requests.post(url, data=obfuscated_message)
         return response.status_code
 
     @staticmethod
-    def receive_encrypted_message(url, use_https=True):
-        """Receives an encrypted message over HTTP/HTTPS"""
-        response = requests.get(url, verify=use_https)
+    def receive_encrypted_message(url):
+        """Receives an encrypted message over HTTP"""
+        response = requests.get(url)
         if response.status_code != 200:
             return None
         obfuscated_message = response.content
         return Obfuscation.deobfuscate_data(obfuscated_message)
 
     @staticmethod
-    def send_encrypted_file(url, encrypted_file_data, file_name, use_https=True):
-        """Sends an encrypted file over HTTP/HTTPS"""
+    def send_encrypted_file(url, encrypted_file_data, file_name):
+        """Sends an encrypted file over HTTP"""
         if encrypted_file_data is None:
             raise ValueError("Encrypted file data cannot be None")
         obfuscated_file_data = Obfuscation.obfuscate_data(encrypted_file_data)
         files = {'file': (file_name, obfuscated_file_data)}
-        response = requests.post(url, files=files, verify=use_https)
+        response = requests.post(url, files=files)
         return response.status_code
 
     @staticmethod
-    def receive_encrypted_file(url, use_https=True):
-        """Receives an encrypted file over HTTP/HTTPS"""
-        response = requests.get(url, verify=use_https)
+    def receive_encrypted_file(url):
+        """Receives an encrypted file over HTTP"""
+        response = requests.get(url)
         if response.status_code != 200:
             return None, None
         file_name = response.headers.get('Content-Disposition').split('filename=')[1]
         obfuscated_file_data = response.content
         return file_name, Obfuscation.deobfuscate_data(obfuscated_file_data)
-
-class WebSocketTransport:
-    @staticmethod
-    def send_encrypted_message(ws_url, encrypted_message):
-        """Sends an encrypted message over WebSockets"""
-        if encrypted_message is None:
-            raise ValueError("Encrypted message cannot be None")
-        obfuscated_message = Obfuscation.obfuscate_data(encrypted_message)
-        ws = websocket.WebSocket()
-        ws.connect(ws_url)
-        ws.send(obfuscated_message)
-        ws.close()
-
-    @staticmethod
