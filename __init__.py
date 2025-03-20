@@ -1,1 +1,0 @@
-from .gmx import gamax
