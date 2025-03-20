@@ -1,4 +1,4 @@
-from cryptogamax import gamaX  # předpokládáme, že jsi to tak pojmenoval
+from cryptogamax import gamax  # předpokládáme, že jsi to tak pojmenoval
 import os
 
 def test_gamax():
@@ -10,7 +10,7 @@ def test_gamax():
     print(f"Klíč uložen do {key_path}")
 
     # 2. Načti klíč z uloženého souboru
-    cipher = GamaX.load_key(key_path)
+    cipher = gamaX.load_key(key_path)
 
     # 3. Text k zašifrování
     original_text = "Toto je tajná zpráva pro test GamaX!"
