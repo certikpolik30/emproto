@@ -11,6 +11,8 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 import json
 import time
+import base64
+import qrcode  # Added for QR code generation
 
 class ECDH:
     @staticmethod
@@ -32,6 +34,23 @@ class ECDH:
             backend=default_backend()
         ).derive(shared_secret)
         return derived_key
+    
+    @staticmethod
+    def generate_verification_code(public_key1, public_key2):
+        """Generates a verification code from two public keys"""
+        combined_keys = public_key1.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ) + public_key2.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        hash_obj = hashlib.sha3_512(combined_keys).hexdigest()
+        short_code = int(hash_obj[:10], 16)  # Shortened for user-friendly display
+        qr = qrcode.QRCode()
+        qr.add_data(hash_obj)
+        qr_code = qr.make_image(fill='black', back_color='white')
+        return short_code, qr_code
 
 class AESGCM:
     @staticmethod
