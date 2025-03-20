@@ -1,6 +1,8 @@
 import socket
 import struct
 from .encryption import obfuscate_data, deobfuscate_data  # Import the required functions
+import requests
+import websocket
 
 # === Odesílání a přijímání zpráv přes TCP ===
 def send_encrypted_message_tcp(sock, encrypted_message):
@@ -97,3 +99,115 @@ def receive_encrypted_file_udp(sock):
     obfuscated_file_data, _ = sock.recvfrom(file_data_length)
 
     return file_name.decode(), deobfuscate_data(obfuscated_file_data)
+
+# === Odesílání a přijímání zpráv přes HTTP ===
+def send_encrypted_message_http(url, encrypted_message):
+    """Odešle šifrovanou zprávu přes HTTP"""
+    if encrypted_message is None:
+        raise ValueError("Encrypted message cannot be None")
+    obfuscated_message = obfuscate_data(encrypted_message)
+    response = requests.post(url, data=obfuscated_message)
+    return response.status_code
+
+def receive_encrypted_message_http(url):
+    """Přijme šifrovanou zprávu přes HTTP"""
+    response = requests.get(url)
+    if response.status_code != 200:
+        return None
+    obfuscated_message = response.content
+    return deobfuscate_data(obfuscated_message)
+
+# === Odesílání a přijímání zpráv přes HTTPS ===
+def send_encrypted_message_https(url, encrypted_message):
+    """Odešle šifrovanou zprávu přes HTTPS"""
+    if encrypted_message is None:
+        raise ValueError("Encrypted message cannot be None")
+    obfuscated_message = obfuscate_data(encrypted_message)
+    response = requests.post(url, data=obfuscated_message, verify=True)
+    return response.status_code
+
+def receive_encrypted_message_https(url):
+    """Přijme šifrovanou zprávu přes HTTPS"""
+    response = requests.get(url, verify=True)
+    if response.status_code != 200:
+        return None
+    obfuscated_message = response.content
+    return deobfuscate_data(obfuscated_message)
+
+# === Odesílání a přijímání zpráv přes WS (plain WebSockets) ===
+def send_encrypted_message_ws(ws_url, encrypted_message):
+    """Odešle šifrovanou zprávu přes WS (plain WebSockets)"""
+    if encrypted_message is None:
+        raise ValueError("Encrypted message cannot be None")
+    obfuscated_message = obfuscate_data(encrypted_message)
+    ws = websocket.WebSocket()
+    ws.connect(ws_url)
+    ws.send(obfuscated_message)
+    ws.close()
+
+def receive_encrypted_message_ws(ws_url):
+    """Přijme šifrovanou zprávu přes WS (plain WebSockets)"""
+    ws = websocket.WebSocket()
+    ws.connect(ws_url)
+    obfuscated_message = ws.recv()
+    ws.close()
+    return deobfuscate_data(obfuscated_message)
+
+# === Odesílání a přijímání souborů přes HTTP ===
+def send_encrypted_file_http(url, encrypted_file_data, file_name):
+    """Odešle šifrovaný soubor přes HTTP"""
+    if encrypted_file_data is None:
+        raise ValueError("Encrypted file data cannot be None")
+    obfuscated_file_data = obfuscate_data(encrypted_file_data)
+    files = {'file': (file_name, obfuscated_file_data)}
+    response = requests.post(url, files=files)
+    return response.status_code
+
+def receive_encrypted_file_http(url):
+    """Přijme šifrovaný soubor přes HTTP"""
+    response = requests.get(url)
+    if response.status_code != 200:
+        return None, None
+    file_name = response.headers.get('Content-Disposition').split('filename=')[1]
+    obfuscated_file_data = response.content
+    return file_name, deobfuscate_data(obfuscated_file_data)
+
+# === Odesílání a přijímání souborů přes HTTPS ===
+def send_encrypted_file_https(url, encrypted_file_data, file_name):
+    """Odešle šifrovaný soubor přes HTTPS"""
+    if encrypted_file_data is None:
+        raise ValueError("Encrypted file data cannot be None")
+    obfuscated_file_data = obfuscate_data(encrypted_file_data)
+    files = {'file': (file_name, obfuscated_file_data)}
+    response = requests.post(url, files=files, verify=True)
+    return response.status_code
+
+def receive_encrypted_file_https(url):
+    """Přijme šifrovaný soubor přes HTTPS"""
+    response = requests.get(url, verify=True)
+    if response.status_code != 200:
+        return None, None
+    file_name = response.headers.get('Content-Disposition').split('filename=')[1]
+    obfuscated_file_data = response.content
+    return file_name, deobfuscate_data(obfuscated_file_data)
+
+# === Odesílání a přijímání souborů přes WS (plain WebSockets) ===
+def send_encrypted_file_ws(ws_url, encrypted_file_data, file_name):
+    """Odešle šifrovaný soubor přes WS (plain WebSockets)"""
+    if encrypted_file_data is None:
+        raise ValueError("Encrypted file data cannot be None")
+    obfuscated_file_data = obfuscate_data(encrypted_file_data)
+    ws = websocket.WebSocket()
+    ws.connect(ws_url)
+    ws.send(file_name)
+    ws.send(obfuscated_file_data)
+    ws.close()
+
+def receive_encrypted_file_ws(ws_url):
+    """Přijme šifrovaný soubor přes WS (plain WebSockets)"""
+    ws = websocket.WebSocket()
+    ws.connect(ws_url)
+    file_name = ws.recv()
+    obfuscated_file_data = ws.recv()
+    ws.close()
+    return file_name, deobfuscate_data(obfuscated_file_data)
