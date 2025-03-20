@@ -211,3 +211,108 @@ def receive_encrypted_file_ws(ws_url):
     obfuscated_file_data = ws.recv()
     ws.close()
     return file_name, deobfuscate_data(obfuscated_file_data)
+
+# === Optimalizace transportní vrstvy ===
+def send_encrypted_message_udp_reliable(sock, encrypted_message, address, retries=3):
+    """Odešle šifrovanou zprávu přes UDP socket s vlastními mechanismy spolehlivosti"""
+    if encrypted_message is None:
+        raise ValueError("Encrypted message cannot be None")
+    obfuscated_message = obfuscate_data(encrypted_message)
+    message_length = len(obfuscated_message)
+    
+    for _ in range(retries):
+        sock.sendto(struct.pack("!I", message_length) + obfuscated_message, address)
+        try:
+            ack, _ = sock.recvfrom(2)
+            if ack == b'OK':
+                break
+        except socket.timeout:
+            continue
+    else:
+        raise Exception("Failed to send message reliably")
+
+def receive_encrypted_message_udp_reliable(sock):
+    """Přijme šifrovanou zprávu přes UDP socket s vlastními mechanismy spolehlivosti"""
+    message_length_data, address = sock.recvfrom(4)
+    if not message_length_data:
+        return None, address
+    message_length = struct.unpack("!I", message_length_data)[0]
+    obfuscated_message, address = sock.recvfrom(message_length)
+    if not obfuscated_message:
+        return None, address
+    sock.sendto(b'OK', address)
+    return deobfuscate_data(obfuscated_message), address
+
+# === Multiplexování ===
+class MultiplexedConnection:
+    def __init__(self, sock):
+        self.sock = sock
+        self.streams = {}
+
+    def send_message(self, stream_id, message):
+        if stream_id not in self.streams:
+            self.streams[stream_id] = b""
+        self.streams[stream_id] += message
+        self.flush_stream(stream_id)
+
+    def receive_message(self, stream_id):
+        if stream_id not in self.streams:
+            self.streams[stream_id] = b""
+        return self.streams[stream_id]
+
+    def flush_stream(self, stream_id):
+        if stream_id in self.streams and self.streams[stream_id]:
+            message = self.streams[stream_id]
+            self.sock.sendall(struct.pack("!I", stream_id) + struct.pack("!I", len(message)) + message)
+            self.streams[stream_id] = b""
+
+    def close_stream(self, stream_id):
+        if stream_id in self.streams:
+            del self.streams[stream_id]
+
+# === NAT Traversal ===
+def stun_request(sock, stun_server):
+    """Odešle STUN požadavek pro překonání NAT"""
+    stun_message = b"\x00\x01" + os.urandom(16)  # Binding Request
+    sock.sendto(stun_message, stun_server)
+    response, _ = sock.recvfrom(1024)
+    return response
+
+def turn_request(sock, turn_server):
+    """Odešle TURN požadavek pro překonání NAT"""
+    turn_message = b"\x00\x03" + os.urandom(16)  # Allocate Request
+    sock.sendto(turn_message, turn_server)
+    response, _ = sock.recvfrom(1024)
+    return response
+
+# === Sharding ===
+def shard_users(users, num_shards):
+    """Rozdělí uživatele do různých shardů"""
+    shards = [[] for _ in range(num_shards)]
+    for i, user in enumerate(users):
+        shards[i % num_shards].append(user)
+    return shards
+
+# === Optimalizace latence ===
+def optimize_latency(path):
+    """Optimalizuje latenci minimalizováním počtu skoků mezi uzly"""
+    optimized_path = sorted(path, key=lambda x: x.latency)
+    return optimized_path
+
+# === Logika pro opětovné připojení a zotavení ===
+class ReconnectHandler:
+    def __init__(self, max_retries, base_delay):
+        self.max_retries = max_retries
+        self.base_delay = base_delay
+
+    def reconnect(self, connect_func):
+        retries = 0
+        delay = self.base_delay
+        while retries < self.max_retries:
+            try:
+                return connect_func()
+            except Exception as e:
+                retries += 1
+                time.sleep(delay)
+                delay *= 2
+        raise Exception("Failed to reconnect after multiple attempts")
