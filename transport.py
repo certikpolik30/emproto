@@ -1,4 +1,3 @@
-import socket
 import struct
 import asyncio  # Added for asynchronous operations
 import zlib  # Added for compression
