@@ -8,25 +8,27 @@ from cryptography.hazmat.primitives.asymmetric import rsa, ec
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
-import nacl.utils
-from nacl.public import PrivateKey, PublicKey, Box
-from nacl.signing import SigningKey, VerifyKey
-from nacl.hash import blake2b
 
-class X3DH:
+class ECDH:
     @staticmethod
     def generate_keypair():
-        """Generates X3DH key pair"""
-        private_key = PrivateKey.generate()
-        public_key = private_key.public_key
+        """Generates ECDH key pair"""
+        private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
+        public_key = private_key.public_key()
         return private_key, public_key
 
     @staticmethod
     def derive_shared_key(private_key, peer_public_key):
-        """Derives shared key using X3DH"""
-        box = Box(private_key, peer_public_key)
-        shared_key = box.shared_key()
-        return shared_key
+        """Derives shared key using ECDH"""
+        shared_secret = private_key.exchange(ec.ECDH(), peer_public_key)
+        derived_key = HKDF(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=None,
+            info=b'EMProto Key Exchange',
+            backend=default_backend()
+        ).derive(shared_secret)
+        return derived_key
 
 class AESGCM:
     @staticmethod
@@ -154,52 +156,15 @@ class SecurityUtils:
         calculated_msg_key = hashlib.sha256(auth_key + decrypted_message.encode()).digest()[:16]
         return hmac.compare_digest(calculated_msg_key, expected_msg_key)
 
-class Obfuscation:
+# Add CCA protection mechanism
+class CCAProtection:
     @staticmethod
-    def random_padding(data, block_size=16):
-        """Adds random padding to the data to make it a multiple of block_size"""
-        padding_length = block_size - (len(data) % block_size)
-        if padding_length == block_size:
-            padding_length = 0
-        padding = os.urandom(padding_length)
-        return data + padding
+    def protect_against_cca(derived_key, ciphertext):
+        """Protects against chosen-ciphertext attacks (CCA)"""
+        return hmac.new(derived_key, ciphertext, hashlib.sha256).digest()
 
     @staticmethod
-    def multi_layer_encryption(data, layers=3):
-        """Applies multiple layers of encryption to the data"""
-        encrypted_data = data
-        for _ in range(layers):
-            key_layer = os.urandom(32)
-            encrypted_data = AESGCM.encrypt(key_layer, encrypted_data)[1]
-        return encrypted_data
-
-    @staticmethod
-    def obfuscate_data(data, metadata=b''):
-        """Obfuscates data to hide its structure and encrypts metadata"""
-        encrypted_metadata = AESGCM.encrypt(os.urandom(32), metadata)[1]
-        data_with_padding = Obfuscation.random_padding(data + encrypted_metadata)
-        obfuscated_data = Obfuscation.multi_layer_encryption(data_with_padding)
-        return obfuscated_data
-
-    @staticmethod
-    def deobfuscate_data(obfuscated_data, layers=3):
-        """Deobfuscates data to its original form"""
-        decrypted_data = obfuscated_data
-        for _ in range(layers):
-            key_layer = decrypted_data[:32]
-            decrypted_data = AESGCM.decrypt(key_layer, decrypted_data[32:44], decrypted_data[44:], decrypted_data[28:44])
-        
-        # Split data and metadata
-        data_length = len(decrypted_data) - 32  # Assuming metadata has a fixed length of 32 bytes
-        data = decrypted_data[:data_length]
-        metadata = decrypted_data[data_length:]
-        
-        return data, metadata
-
-class KeyRotation:
-    @staticmethod
-    def rotate_keys(current_private_key, peer_public_key):
-        """Regularly changes encryption keys to ensure forward secrecy"""
-        new_private_key, new_public_key = X3DH.generate_keypair()
-        shared_key = X3DH.derive_shared_key(new_private_key, peer_public_key)
-        return new_private_key, new_public_key, shared_key
+    def verify_cca_protection(derived_key, ciphertext, expected_cca_tag):
+        """Verifies CCA protection"""
+        calculated_cca_tag = hmac.new(derived_key, ciphertext, hashlib.sha256).digest()
+        return hmac.compare_digest(calculated_cca_tag, expected_cca_tag)
