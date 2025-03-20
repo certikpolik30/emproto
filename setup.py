@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='mvproto',
+    name='libdemon',
     version='0.6',
     packages=find_packages(),
     description='A secure communication protocol for e2ee.',
