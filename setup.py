@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='mvproto',
-    version='0.1',
+    version='0.2',
     packages=find_packages(),
     description='A secure communication protocol for e2ee.',
     author='Alfisene Keita',
