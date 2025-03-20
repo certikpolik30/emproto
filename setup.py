@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='vmproto',
-    version='0.9.0',
+    version='0.1',
     packages=find_packages(),
     description='A secure communication protocol for e2ee.',
     author='Alfisene Keita',
